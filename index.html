@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>3-Day PPL Workout</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            font-size: 24px;
+            line-height: 1.5;
+            -webkit-tap-highlight-color: transparent;
+        }
+        h2 { 
+            color: #4CAF50; 
+            text-align: center; 
+            font-size: 32px; 
+            margin-top: 20px;
+        }
+        h3 {
+            color: #4CAF50;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .container { 
+            padding: calc(90px + env(safe-area-inset-top, 0px)) 20px 40px 20px;
+            max-width: 800px;
+            margin: auto;
+        }
+        
+        .nav-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #1e1e1e;
+            display: flex;
+            justify-content: space-around;
+            padding: calc(15px + env(safe-area-inset-top, 0px)) 0 15px 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+        .nav-btn {
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 15px 5px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            flex-grow: 1;
+            margin: 0 8px;
+            text-align: center;
+            touch-action: manipulation;
+        }
+        .nav-btn.active {
+            background-color: #4CAF50;
+            color: #000;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .exercise-card, .summary-card {
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-left: 8px solid #4CAF50;
+        }
+        .exercise-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #4CAF50;
+        }
+        
+        /* Control rows for Weight and Reps */
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #2a2a2a;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .control-label {
+            font-size: 24px;
+            font-weight: bold;
+            width: 110px;
+        }
+        .control-actions {
+            display: flex;
+            align-items: center;
+        }
+        .btn-adjust {
+            background-color: #4CAF50;
+            color: #000;
+            border: none;
+            width: 50px;
+            height: 50px;
+            font-size: 32px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation; /* no double-tap zoom delay when tapping fast */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .btn-adjust:active {
+            background-color: #388E3C;
+        }
+        .val-display {
+            width: 80px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .warmup-box {
+            background-color: #223322;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 22px;
+            border: 1px solid #4CAF50;
+        }
+        .warmup-text {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .notes {
+            font-size: 20px;
+            color: #cccccc;
+            margin-top: 10px;
+        }
+        
+        .rules-list { padding-left: 25px; }
+        .rules-list li { margin-bottom: 20px; font-size: 22px; }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            padding: 10px 0;
+            font-size: 22px;
+        }
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+        .summary-name {
+            width: 60%;
+        }
+        .summary-stats {
+            width: 40%;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* Install button: only shown when the browser says the app can be installed */
+        .install-card {
+            display: none;
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-left: 8px solid #4CAF50;
+        }
+        .install-card.visible { display: block; }
+        .install-card p {
+            margin: 0 0 15px 0;
+            font-size: 22px;
+            color: #cccccc;
+        }
+        .btn-install {
+            width: 100%;
+            background-color: #4CAF50;
+            color: #000;
+            border: none;
+            padding: 18px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .btn-install:active { background-color: #388E3C; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <button class="nav-btn active" onclick="openTab(event, 'info')">Info</button>
+        <button class="nav-btn" onclick="openTab(event, 'push')">Push</button>
+        <button class="nav-btn" onclick="openTab(event, 'pull')">Pull</button>
+        <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
+    </div>
+
+    <div class="container">
+        <!-- INFO TAB -->
+        <div id="info" class="tab-content active">
+            <div id="install_card" class="install-card">
+                <p>Add this to your home screen so it opens full-screen and works offline at the gym.</p>
+                <button id="install_btn" class="btn-install">Install app</button>
+            </div>
+
+            <h2>The Protocol</h2>
+            <ul class="rules-list">
+                <li><strong>Warmup 1:</strong> 50% weight (auto-calculated).</li>
+                <li><strong>Warmup 2:</strong> 75% weight (auto-calculated).</li>
+                <li><strong>Working Set:</strong> 100% weight to <strong>Absolute Failure</strong>.</li>
+                <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time.</li>
+            </ul>
+
+            <h2>Last Workout Summary</h2>
+            <div id="summary_content"></div>
+        </div>
+        
+        <!-- PUSH TAB -->
+        <div id="push" class="tab-content">
+            <h2>Monday: Push</h2>
+            <div id="push_content"></div>
+        </div>
+
+        <!-- PULL TAB -->
+        <div id="pull" class="tab-content">
+            <h2>Wednesday: Pull</h2>
+            <div id="pull_content"></div>
+        </div>
+
+        <!-- LEGS TAB -->
+        <div id="legs" class="tab-content">
+            <h2>Friday: Legs & Core</h2>
+            <div id="legs_content"></div>
+        </div>
+    </div>
+
+    <script>
+        const exercises = {
+            push: [
+                { id: 'inc_press', name: 'Incline Machine Press' },
+                { id: 'pec_deck', name: 'Pec Deck' },
+                { id: 'cab_lat', name: 'Cable Lateral Raises' },
+                { id: 'tri_push', name: 'Machine Triceps Pushdown' }
+            ],
+            pull: [
+                { id: 'lat_pull', name: 'Lat Pulldown' },
+                { id: 'high_row', name: 'Machine High Row' },
+                { id: 'rev_pec', name: 'Reverse Pec Deck' },
+                { id: 'db_curl', name: 'Dumbbell Bicep Curls' },
+                { id: 'abs_crunch', name: 'Machine Abs Crunch' }
+            ],
+            legs: [
+                { id: 'leg_curl', name: 'Seated Leg Curls' },
+                { id: 'split_squat', name: 'DB Bulgarian Split Squats' },
+                { id: 'leg_press', name: 'Machine Leg Press' },
+                { id: 'calf_raise', name: 'Machine Calf Raises' },
+                { id: 'pallof', name: 'Pallof Press' }
+            ]
+        };
+
+        const dayTitles = {
+            push: 'Push (Monday)',
+            pull: 'Pull (Wednesday)',
+            legs: 'Legs (Friday)'
+        };
+
+        // Storage wrapper: same behaviour as before, but never crashes if storage is blocked.
+        const store = {
+            get(key, fallback) {
+                try {
+                    const v = localStorage.getItem(key);
+                    return (v === null || v === '') ? fallback : v;
+                } catch (e) { return fallback; }
+            },
+            set(key, value) {
+                try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+            }
+        };
+
+        function generateCardHtml(ex) {
+            return `
+            <div class="exercise-card">
+                <div class="exercise-title">${ex.name}</div>
+                
+                <div class="control-row">
+                    <div class="control-label">Weight:</div>
+                    <div class="control-actions">
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'weight', -5)">-</button>
+                        <div class="val-display"><span id="${ex.id}_weight">100</span></div>
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'weight', 5)">+</button>
+                    </div>
+                </div>
+
+                <div class="control-row">
+                    <div class="control-label">Reps:</div>
+                    <div class="control-actions">
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'reps', -1)">-</button>
+                        <div class="val-display"><span id="${ex.id}_reps">6</span></div>
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'reps', 1)">+</button>
+                    </div>
+                </div>
+
+                <div class="warmup-box">
+                    <div class="warmup-text">
+                        <span>Warmup 1 (50%):</span>
+                        <strong><span id="${ex.id}_wu1">50</span> lbs</strong>
+                    </div>
+                    <div class="warmup-text">
+                        <span>Warmup 2 (75%):</span>
+                        <strong><span id="${ex.id}_wu2">75</span> lbs</strong>
+                    </div>
+                </div>
+                <div class="notes">Target: 1 Working Set to Failure</div>
+            </div>`;
+        }
+
+        function init() {
+            // Render HTML
+            document.getElementById('push_content').innerHTML = exercises.push.map(generateCardHtml).join('');
+            document.getElementById('pull_content').innerHTML = exercises.pull.map(generateCardHtml).join('');
+            document.getElementById('legs_content').innerHTML = exercises.legs.map(generateCardHtml).join('');
+
+            // Load saved data and calculate warmups
+            ['push', 'pull', 'legs'].forEach(day => {
+                exercises[day].forEach(ex => {
+                    let weight = store.get(ex.id + '_weight', 100);
+                    let reps = store.get(ex.id + '_reps', 6);
+                    
+                    let weightEl = document.getElementById(ex.id + '_weight');
+                    let repsEl = document.getElementById(ex.id + '_reps');
+                    
+                    if (weightEl) weightEl.innerText = weight;
+                    if (repsEl) repsEl.innerText = reps;
+                    
+                    calcWarmups(ex.id, weight);
+                });
+            });
+
+            updateSummary();
+        }
+
+        function updateVal(id, type, delta) {
+            let el = document.getElementById(id + '_' + type);
+            if (!el) return;
+            
+            let val = parseInt(el.innerText) + delta;
+            if (val < 0) val = 0; // Prevent negative numbers
+            el.innerText = val;
+            store.set(id + '_' + type, val);
+            
+            if (type === 'weight') {
+                calcWarmups(id, val);
+            }
+
+            // Instantly update summary when values change
+            updateSummary();
+        }
+
+        function calcWarmups(id, weight) {
+            let w = parseInt(weight);
+            let wu1 = Math.round((w * 0.5) / 5) * 5;
+            let wu2 = Math.round((w * 0.75) / 5) * 5;
+            
+            let wu1El = document.getElementById(id + '_wu1');
+            let wu2El = document.getElementById(id + '_wu2');
+            
+            if (wu1El) wu1El.innerText = wu1;
+            if (wu2El) wu2El.innerText = wu2;
+        }
+
+        function updateSummary() {
+            let html = '';
+            
+            ['push', 'pull', 'legs'].forEach(day => {
+                html += `<div class="summary-card">`;
+                html += `<h3>${dayTitles[day]}</h3>`;
+                
+                exercises[day].forEach(ex => {
+                    let weight = store.get(ex.id + '_weight', 100);
+                    let reps = store.get(ex.id + '_reps', 6);
+                    
+                    html += `
+                    <div class="summary-row">
+                        <div class="summary-name">${ex.name}</div>
+                        <div class="summary-stats">${weight} lbs &times; ${reps}</div>
+                    </div>`;
+                });
+                
+                html += `</div>`;
+            });
+            
+            let summaryEl = document.getElementById('summary_content');
+            if (summaryEl) {
+                summaryEl.innerHTML = html;
+            }
+        }
+
+        function openTab(evt, tabId) {
+            let i, tabcontent, navbtns;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+            navbtns = document.getElementsByClassName("nav-btn");
+            for (i = 0; i < navbtns.length; i++) {
+                navbtns[i].classList.remove("active");
+            }
+            document.getElementById(tabId).classList.add("active");
+            evt.currentTarget.classList.add("active");
+            window.scrollTo(0,0);
+        }
+
+        // ---------- PWA: install button ----------
+        // Chrome and Samsung Internet fire this once the site qualifies for install.
+        let deferredInstall = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstall = e;
+            document.getElementById('install_card').classList.add('visible');
+        });
+        document.getElementById('install_btn').addEventListener('click', async () => {
+            if (!deferredInstall) return;
+            deferredInstall.prompt();
+            await deferredInstall.userChoice;
+            deferredInstall = null;
+            document.getElementById('install_card').classList.remove('visible');
+        });
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('install_card').classList.remove('visible');
+        });
+
+        // ---------- PWA: offline support ----------
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => { /* not available here */ });
+            });
+        }
+
+        // Initialize on load
+        window.onload = init;
+    </script>
+</body>
+</html>
