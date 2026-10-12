@@ -94,6 +94,8 @@
         /* Control rows for Weight and Reps */
         .control-row {
             display: flex;
+            flex-wrap: wrap;
+            row-gap: 8px;
             align-items: center;
             justify-content: space-between;
             background-color: #2a2a2a;
@@ -104,11 +106,13 @@
         .control-label {
             font-size: 24px;
             font-weight: bold;
-            width: 110px;
+            width: 100px;
         }
         .control-actions {
             display: flex;
             align-items: center;
+            margin-left: auto;
+            flex-shrink: 0;
         }
         .btn-adjust {
             background-color: #4CAF50;
@@ -131,10 +135,18 @@
             background-color: #388E3C;
         }
         .val-display {
-            width: 80px;
+            min-width: 80px;
+            padding: 0 2px;
             text-align: center;
             font-size: 28px;
             font-weight: bold;
+            white-space: nowrap;
+        }
+        .val-display .unit {
+            font-size: 15px;
+            font-weight: normal;
+            color: #cccccc;
+            margin-left: 3px;
         }
         
         .warmup-box {
@@ -177,6 +189,25 @@
             width: 40%;
             text-align: right;
             font-weight: bold;
+        }
+        .summary-stats div { white-space: nowrap; }
+
+        /* Set headers inside a card when an exercise has more than one working set */
+        .set-group { margin-bottom: 4px; }
+        .set-label {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4CAF50;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 4px 0 6px 2px;
+        }
+        .set-label span {
+            color: #999999;
+            font-weight: normal;
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 16px;
         }
 
         /* Install button: only shown when the browser says the app can be installed */
@@ -229,9 +260,10 @@
             <h2>The Protocol</h2>
             <ul class="rules-list">
                 <li><strong>Warmup 1:</strong> 50% weight (auto-calculated).</li>
-                <li><strong>Warmup 2:</strong> 75% weight (auto-calculated).</li>
-                <li><strong>Working Set:</strong> 100% weight to <strong>Absolute Failure</strong>.</li>
+                <li><strong>Warmup 2:</strong> 75% weight (auto-calculated). The 2nd exercise for a muscle group skips Warmup 1 and does only this one.</li>
+                <li><strong>Working Sets:</strong> 100% weight to <strong>Absolute Failure</strong>. Push: 2 sets, dropping the weight on Set 2 if needed. Pull &amp; Legs: 1 set.</li>
                 <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time.</li>
+                <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
 
             <h2>Last Workout Summary</h2>
@@ -258,12 +290,20 @@
     </div>
 
     <script>
+        // Standard kettlebell sizes in kg. Edit this list to match the bells at your gym.
+        const KETTLEBELLS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40, 44, 48];
+
+        // Exercises default to lbs in 5 lb steps, 1 working set, and 2 warmups (50% + 75%). Options:
+        //   sets: 2                   two working sets, each with its own weight and reps
+        //   warmups: 1                single 75% warmup (for the 2nd exercise of a muscle group)
+        //   unit / sizes / defaultWeight   fixed weight list, e.g. kettlebells
         const exercises = {
             push: [
-                { id: 'inc_press', name: 'Incline Machine Press' },
-                { id: 'pec_deck', name: 'Pec Deck' },
-                { id: 'cab_lat', name: 'Cable Lateral Raises' },
-                { id: 'tri_push', name: 'Machine Triceps Pushdown' }
+                { id: 'inc_press', name: 'Incline Machine Press', sets: 2 },
+                { id: 'pec_deck', name: 'Pec Deck', sets: 2, warmups: 1 },
+                { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2 },
+                { id: 'tri_push', name: 'Machine Triceps Pushdown', sets: 2 },
+                { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1 }
             ],
             pull: [
                 { id: 'lat_pull', name: 'Lat Pulldown' },
@@ -274,7 +314,7 @@
             ],
             legs: [
                 { id: 'leg_curl', name: 'Seated Leg Curls' },
-                { id: 'split_squat', name: 'DB Bulgarian Split Squats' },
+                { id: 'kb_split_squat', name: 'KB Bulgarian Split Squats', unit: 'kg', sizes: KETTLEBELLS, defaultWeight: 16 },
                 { id: 'leg_press', name: 'Machine Leg Press' },
                 { id: 'calf_raise', name: 'Machine Calf Raises' },
                 { id: 'pallof', name: 'Pallof Press' }
@@ -300,40 +340,95 @@
             }
         };
 
+
+        // ---------- Weight helpers ----------
+        function unitOf(ex) { return ex.unit || 'lbs'; }
+        function defaultWeight(ex) { return ex.defaultWeight || 100; }
+        function findEx(id) {
+            for (const day in exercises) {
+                const ex = exercises[day].find(e => e.id === id);
+                if (ex) return ex;
+            }
+            return null;
+        }
+        // Nearest available size; on a tie, take the lighter one.
+        function nearestSize(sizes, target) {
+            let best = sizes[0];
+            for (const s of sizes) {
+                const d = Math.abs(s - target), bd = Math.abs(best - target);
+                if (d < bd || (d === bd && s < best)) best = s;
+            }
+            return best;
+        }
+        // Move one step up (+1) or down (-1): next bell for fixed sizes, 5 lbs otherwise.
+        function stepWeight(ex, current, dir) {
+            if (ex.sizes) {
+                let i = ex.sizes.indexOf(nearestSize(ex.sizes, current)) + dir;
+                i = Math.max(0, Math.min(ex.sizes.length - 1, i));
+                return ex.sizes[i];
+            }
+            return Math.max(0, current + dir * 5);
+        }
+
+        // Storage keys: Set 1 uses "<id>_weight" / "<id>_reps" (so existing data carries over),
+        // later sets use "<id>_s2_weight" / "<id>_s2_reps".
+        function key(ex, set, type) { return ex.id + (set > 1 ? '_s' + set : '') + '_' + type; }
+        function setsOf(ex) { return ex.sets || 1; }
+        function warmupsOf(ex) { return ex.warmups === undefined ? 2 : ex.warmups; }
+
+        function loadWeight(ex, set, fallback) {
+            let w = parseInt(store.get(key(ex, set, 'weight'), fallback));
+            if (isNaN(w)) w = fallback;
+            if (ex.sizes) w = nearestSize(ex.sizes, w);
+            return w;
+        }
+
+        function controlRowHtml(ex, set, type, label) {
+            const id = key(ex, set, type);
+            const unit = type === 'weight' ? `<span class="unit">${unitOf(ex)}</span>` : '';
+            const start = type === 'weight' ? defaultWeight(ex) : 6;
+            return `
+                <div class="control-row">
+                    <div class="control-label">${label}</div>
+                    <div class="control-actions">
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', '${type}', -1, ${set})">-</button>
+                        <div class="val-display"><span id="${id}">${start}</span>${unit}</div>
+                        <button class="btn-adjust" onclick="updateVal('${ex.id}', '${type}', 1, ${set})">+</button>
+                    </div>
+                </div>`;
+        }
+
         function generateCardHtml(ex) {
+            const sets = setsOf(ex);
+            const unit = unitOf(ex);
+
+            let controls = '';
+            for (let s = 1; s <= sets; s++) {
+                controls += `<div class="set-group">`;
+                if (sets > 1) {
+                    controls += `<div class="set-label">Set ${s}${s > 1 ? ' <span>drop the weight if needed</span>' : ''}</div>`;
+                }
+                controls += controlRowHtml(ex, s, 'weight', 'Weight:');
+                controls += controlRowHtml(ex, s, 'reps', 'Reps:');
+                controls += `</div>`;
+            }
+
+            let warmups = '';
+            if (warmupsOf(ex) >= 2) {
+                warmups += `<div class="warmup-text"><span>Warmup 1 (50%):</span><strong><span id="${ex.id}_wu1"></span> ${unit}</strong></div>`;
+                warmups += `<div class="warmup-text"><span>Warmup 2 (75%):</span><strong><span id="${ex.id}_wu2"></span> ${unit}</strong></div>`;
+            } else {
+                warmups += `<div class="warmup-text"><span>Warmup (75%):</span><strong><span id="${ex.id}_wu2"></span> ${unit}</strong></div>`;
+            }
+
+            const target = sets > 1 ? `Target: ${sets} Working Sets to Failure` : 'Target: 1 Working Set to Failure';
+
             return `
             <div class="exercise-card">
                 <div class="exercise-title">${ex.name}</div>
-                
-                <div class="control-row">
-                    <div class="control-label">Weight:</div>
-                    <div class="control-actions">
-                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'weight', -5)">-</button>
-                        <div class="val-display"><span id="${ex.id}_weight">100</span></div>
-                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'weight', 5)">+</button>
-                    </div>
-                </div>
-
-                <div class="control-row">
-                    <div class="control-label">Reps:</div>
-                    <div class="control-actions">
-                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'reps', -1)">-</button>
-                        <div class="val-display"><span id="${ex.id}_reps">6</span></div>
-                        <button class="btn-adjust" onclick="updateVal('${ex.id}', 'reps', 1)">+</button>
-                    </div>
-                </div>
-
-                <div class="warmup-box">
-                    <div class="warmup-text">
-                        <span>Warmup 1 (50%):</span>
-                        <strong><span id="${ex.id}_wu1">50</span> lbs</strong>
-                    </div>
-                    <div class="warmup-text">
-                        <span>Warmup 2 (75%):</span>
-                        <strong><span id="${ex.id}_wu2">75</span> lbs</strong>
-                    </div>
-                </div>
-                <div class="notes">Target: 1 Working Set to Failure</div>
+                ${controls}
+                <div class="warmup-box">${warmups}</div>
+                <div class="notes">${target}</div>
             </div>`;
         }
 
@@ -343,49 +438,79 @@
             document.getElementById('pull_content').innerHTML = exercises.pull.map(generateCardHtml).join('');
             document.getElementById('legs_content').innerHTML = exercises.legs.map(generateCardHtml).join('');
 
+            // One-time carry-over: keep the reps you logged on the dumbbell split squats.
+            if (store.get('kb_split_squat_reps', null) === null) {
+                const oldReps = store.get('split_squat_reps', null);
+                if (oldReps !== null) store.set('kb_split_squat_reps', oldReps);
+            }
+
             // Load saved data and calculate warmups
             ['push', 'pull', 'legs'].forEach(day => {
                 exercises[day].forEach(ex => {
-                    let weight = store.get(ex.id + '_weight', 100);
-                    let reps = store.get(ex.id + '_reps', 6);
-                    
-                    let weightEl = document.getElementById(ex.id + '_weight');
-                    let repsEl = document.getElementById(ex.id + '_reps');
-                    
-                    if (weightEl) weightEl.innerText = weight;
-                    if (repsEl) repsEl.innerText = reps;
-                    
-                    calcWarmups(ex.id, weight);
+                    const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
+                    for (let s = 1; s <= setsOf(ex); s++) {
+                        // A set that has never been adjusted starts at the Set 1 weight.
+                        const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
+                        const reps = store.get(key(ex, s, 'reps'), 6);
+
+                        const weightEl = document.getElementById(key(ex, s, 'weight'));
+                        const repsEl = document.getElementById(key(ex, s, 'reps'));
+                        if (weightEl) weightEl.innerText = weight;
+                        if (repsEl) repsEl.innerText = reps;
+                    }
+                    calcWarmups(ex, set1Weight);
                 });
             });
 
             updateSummary();
         }
 
-        function updateVal(id, type, delta) {
-            let el = document.getElementById(id + '_' + type);
+        function updateVal(id, type, dir, set) {
+            set = set || 1;
+            const ex = findEx(id);
+            if (!ex) return;
+            const el = document.getElementById(key(ex, set, type));
             if (!el) return;
             
-            let val = parseInt(el.innerText) + delta;
-            if (val < 0) val = 0; // Prevent negative numbers
-            el.innerText = val;
-            store.set(id + '_' + type, val);
-            
+            let val = parseInt(el.innerText);
             if (type === 'weight') {
-                calcWarmups(id, val);
+                const prev = val;
+                val = stepWeight(ex, val, dir);
+                if (set === 1) {
+                    calcWarmups(ex, val);
+                    // Later sets follow Set 1 while they still match it. Once you drop Set 2's
+                    // weight it stays where you put it until you line it back up.
+                    for (let s = 2; s <= setsOf(ex); s++) {
+                        const other = document.getElementById(key(ex, s, 'weight'));
+                        if (other && parseInt(other.innerText) === prev) {
+                            other.innerText = val;
+                            store.set(key(ex, s, 'weight'), val);
+                        }
+                    }
+                }
+            } else {
+                val = Math.max(0, val + dir); // Prevent negative numbers
             }
+            el.innerText = val;
+            store.set(key(ex, set, type), val);
 
             // Instantly update summary when values change
             updateSummary();
         }
 
-        function calcWarmups(id, weight) {
+        function calcWarmups(ex, weight) {
             let w = parseInt(weight);
-            let wu1 = Math.round((w * 0.5) / 5) * 5;
-            let wu2 = Math.round((w * 0.75) / 5) * 5;
+            let wu1, wu2;
+            if (ex.sizes) {
+                wu1 = nearestSize(ex.sizes, w * 0.5);
+                wu2 = nearestSize(ex.sizes, w * 0.75);
+            } else {
+                wu1 = Math.round((w * 0.5) / 5) * 5;
+                wu2 = Math.round((w * 0.75) / 5) * 5;
+            }
             
-            let wu1El = document.getElementById(id + '_wu1');
-            let wu2El = document.getElementById(id + '_wu2');
+            let wu1El = document.getElementById(ex.id + '_wu1');
+            let wu2El = document.getElementById(ex.id + '_wu2');
             
             if (wu1El) wu1El.innerText = wu1;
             if (wu2El) wu2El.innerText = wu2;
@@ -399,13 +524,18 @@
                 html += `<h3>${dayTitles[day]}</h3>`;
                 
                 exercises[day].forEach(ex => {
-                    let weight = store.get(ex.id + '_weight', 100);
-                    let reps = store.get(ex.id + '_reps', 6);
+                    const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
+                    let lines = '';
+                    for (let s = 1; s <= setsOf(ex); s++) {
+                        const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
+                        const reps = store.get(key(ex, s, 'reps'), 6);
+                        lines += `<div>${weight} ${unitOf(ex)} &times; ${reps}</div>`;
+                    }
                     
                     html += `
                     <div class="summary-row">
                         <div class="summary-name">${ex.name}</div>
-                        <div class="summary-stats">${weight} lbs &times; ${reps}</div>
+                        <div class="summary-stats">${lines}</div>
                     </div>`;
                 });
                 
@@ -456,6 +586,12 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(() => { /* not available here */ });
+            });
+            // When an updated version installs, reload once so it shows immediately.
+            let hadController = !!navigator.serviceWorker.controller;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (hadController) window.location.reload();
+                hadController = true;
             });
         }
 

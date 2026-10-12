@@ -1,5 +1,5 @@
 // Bump this version whenever you change index.html so phones pick up the update.
-const CACHE = 'ppl-workout-v1';
+const CACHE = 'ppl-workout-v2';
 
 const ASSETS = [
   './',
@@ -15,7 +15,7 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });
