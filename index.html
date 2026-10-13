@@ -15,6 +15,33 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
 
     <style>
+        /* ---------- Full-screen exercise sizing ----------
+           Every exercise card is sized to the space between the top bar and the bottom of the
+           screen, so one swipe = one exercise. Nothing here is a fixed phone size:
+           --nav-h      measured from the real top bar at startup (and whenever it changes size)
+           --screen-h   the screen height. "svh" is the height with the browser toolbars showing,
+                        so cards never get cut off in a browser tab; in the installed app it is
+                        simply the full app height.
+           --gap        space above and below each card
+           Content inside a card spreads out to fill the height, and on a very short screen the
+           card grows to fit its content instead of cutting anything off. */
+        :root {
+            --nav-h: calc(63px + env(safe-area-inset-top, 0px)); /* replaced by the measured value */
+            --gap: 10px;
+            --screen-h: 100vh;
+            --page-h: calc(var(--screen-h) - var(--nav-h) - 2 * var(--gap) - env(safe-area-inset-bottom, 0px));
+            /* +/- buttons get taller when the screen has room, wider only as far as the width allows */
+            --btn-h: clamp(48px, calc(var(--page-h) * 0.085), 62px);
+            --btn-w: clamp(48px, 14.5vw, 62px);
+        }
+        @supports (height: 100svh) {
+            :root { --screen-h: 100svh; }
+        }
+        html.snap {
+            scroll-snap-type: y mandatory;
+            scroll-padding-top: calc(var(--nav-h) + var(--gap));
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
@@ -37,8 +64,8 @@
             margin-bottom: 10px;
             font-size: 28px;
         }
-        .container { 
-            padding: calc(74px + env(safe-area-inset-top, 0px)) 14px 30px 14px;
+        .container {
+            padding: calc(var(--nav-h) + var(--gap)) 14px 30px 14px;
             max-width: 800px;
             margin: auto;
         }
@@ -84,18 +111,41 @@
             margin-bottom: 16px;
             border-left: 8px solid #4CAF50;
         }
-        html { scroll-snap-type: y proximity; }
         .exercise-card {
+            box-sizing: border-box;
+            min-height: var(--page-h);
+            margin-bottom: var(--gap);
+            display: flex;
+            flex-direction: column;
             scroll-snap-align: start;
-            scroll-margin-top: calc(72px + env(safe-area-inset-top, 0px));
+            scroll-snap-stop: always; /* a hard flick still stops at the next exercise */
         }
+        /* The workout tabs end on a full-screen card, so no extra space after it */
+        html.snap .container { padding-bottom: 0; }
         .summary-card { padding: 20px; }
+        .card-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            line-height: 1.3;
+            color: #999999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 0 2px 0;
+        }
         .exercise-title {
             font-size: 26px;
             line-height: 1.2;
             font-weight: bold;
             margin-bottom: 8px;
             color: #4CAF50;
+        }
+        /* Sets and warmups share the card's spare height evenly */
+        .card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
         }
         
         /* Control rows for Weight and Reps */
@@ -125,8 +175,8 @@
             background-color: #4CAF50;
             color: #000;
             border: none;
-            width: 48px;
-            height: 48px;
+            width: var(--btn-w);
+            height: var(--btn-h);
             font-size: 30px;
             font-weight: bold;
             border-radius: 8px;
@@ -270,7 +320,7 @@
             <ul class="rules-list">
                 <li><strong>Warmup 1:</strong> 50% weight (auto-calculated).</li>
                 <li><strong>Warmup 2:</strong> 75% weight (auto-calculated). The 2nd exercise for a muscle group skips Warmup 1 and does only this one.</li>
-                <li><strong>Working Sets:</strong> 100% weight to <strong>Absolute Failure</strong>. Push: 2 sets, dropping the weight on Set 2 if needed. Pull &amp; Legs: 1 set.</li>
+                <li><strong>Working Sets:</strong> 2 sets at 100% weight to <strong>Absolute Failure</strong>, dropping the weight on Set 2 if needed.</li>
                 <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time.</li>
                 <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
@@ -279,21 +329,18 @@
             <div id="summary_content"></div>
         </div>
         
-        <!-- PUSH TAB -->
+        <!-- PUSH TAB (the day name shows at the top of each exercise) -->
         <div id="push" class="tab-content">
-            <h2>Monday: Push</h2>
             <div id="push_content"></div>
         </div>
 
         <!-- PULL TAB -->
         <div id="pull" class="tab-content">
-            <h2>Wednesday: Pull</h2>
             <div id="pull_content"></div>
         </div>
 
         <!-- LEGS TAB -->
         <div id="legs" class="tab-content">
-            <h2>Friday: Legs & Core</h2>
             <div id="legs_content"></div>
         </div>
     </div>
@@ -315,19 +362,26 @@
                 { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1 }
             ],
             pull: [
-                { id: 'lat_pull', name: 'Lat Pulldown' },
-                { id: 'high_row', name: 'Machine High Row' },
-                { id: 'rev_pec', name: 'Reverse Pec Deck' },
-                { id: 'db_curl', name: 'Dumbbell Bicep Curls' },
-                { id: 'abs_crunch', name: 'Machine Abs Crunch' }
+                { id: 'lat_pull', name: 'Lat Pulldown', sets: 2 },
+                { id: 'high_row', name: 'Machine High Row', sets: 2, warmups: 1 },   // 2nd back exercise
+                { id: 'rev_pec', name: 'Reverse Pec Deck', sets: 2 },
+                { id: 'db_curl', name: 'Dumbbell Bicep Curls', sets: 2 },
+                { id: 'abs_crunch', name: 'Machine Abs Crunch', sets: 2 }
             ],
             legs: [
-                { id: 'leg_curl', name: 'Seated Leg Curls' },
-                { id: 'kb_split_squat', name: 'KB Bulgarian Split Squats', unit: 'kg', sizes: KETTLEBELLS, defaultWeight: 16 },
-                { id: 'leg_press', name: 'Machine Leg Press' },
-                { id: 'calf_raise', name: 'Machine Calf Raises' },
-                { id: 'pallof', name: 'Pallof Press' }
+                { id: 'leg_curl', name: 'Seated Leg Curls', sets: 2 },
+                { id: 'kb_split_squat', name: 'KB Bulgarian Split Squats', sets: 2, unit: 'kg', sizes: KETTLEBELLS, defaultWeight: 16 },
+                { id: 'leg_press', name: 'Machine Leg Press', sets: 2, warmups: 1 },  // 2nd quad exercise
+                { id: 'calf_raise', name: 'Machine Calf Raises', sets: 2 },
+                { id: 'pallof', name: 'Pallof Press', sets: 2 }
             ]
+        };
+
+        // Shown at the top of every exercise screen
+        const dayHeads = {
+            push: 'Monday &middot; Push',
+            pull: 'Wednesday &middot; Pull',
+            legs: 'Friday &middot; Legs &amp; Core'
         };
 
         const dayTitles = {
@@ -407,7 +461,7 @@
                 </div>`;
         }
 
-        function generateCardHtml(ex) {
+        function generateCardHtml(ex, day, num, total) {
             const sets = setsOf(ex);
             const unit = unitOf(ex);
 
@@ -434,18 +488,22 @@
 
             return `
             <div class="exercise-card">
+                <div class="card-head"><span>${dayHeads[day]}</span><span>${num} / ${total}</span></div>
                 <div class="exercise-title">${ex.name}</div>
-                ${controls}
-                <div class="warmup-box">${warmups}</div>
+                <div class="card-body">
+                    ${controls}
+                    <div class="warmup-box">${warmups}</div>
+                </div>
                 <div class="notes">${target}</div>
             </div>`;
         }
 
         function init() {
             // Render HTML
-            document.getElementById('push_content').innerHTML = exercises.push.map(generateCardHtml).join('');
-            document.getElementById('pull_content').innerHTML = exercises.pull.map(generateCardHtml).join('');
-            document.getElementById('legs_content').innerHTML = exercises.legs.map(generateCardHtml).join('');
+            ['push', 'pull', 'legs'].forEach(day => {
+                document.getElementById(day + '_content').innerHTML = exercises[day]
+                    .map((ex, i, all) => generateCardHtml(ex, day, i + 1, all.length)).join('');
+            });
 
             // One-time carry-over: keep the reps you logged on the dumbbell split squats.
             if (store.get('kb_split_squat_reps', null) === null) {
@@ -569,8 +627,22 @@
             }
             document.getElementById(tabId).classList.add("active");
             evt.currentTarget.classList.add("active");
+            // Snap one exercise at a time on workout days; Info scrolls freely.
+            document.documentElement.classList.toggle('snap', tabId !== 'info');
             window.scrollTo(0,0);
         }
+
+        // ---------- Full-screen sizing: measure the top bar ----------
+        // The bar's height depends on the phone's font size and status bar, so measure it
+        // rather than guess. Cards use it to fill exactly the rest of the screen.
+        const navBar = document.querySelector('.nav-bar');
+        function setNavHeight() {
+            const h = Math.ceil(navBar.getBoundingClientRect().height);
+            if (h > 0) document.documentElement.style.setProperty('--nav-h', h + 'px');
+        }
+        setNavHeight();
+        if ('ResizeObserver' in window) new ResizeObserver(setNavHeight).observe(navBar);
+        window.addEventListener('resize', setNavHeight);
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.

@@ -30,6 +30,20 @@ Open the URL on the phone, then:
 
 An "Install app" button also appears at the top of the Info tab once the browser confirms the site qualifies.
 
+## Changing the plan
+Exercises are a short list near the top of the script in `index.html`. Each entry can take:
+- `sets: 2` for two working sets with their own weight and reps (all three days use this)
+- `warmups: 1` for a single 75% warmup (the 2nd exercise of a muscle group:
+  Pec Deck, Overhead Triceps Extensions, Machine High Row, Leg Press)
+- `unit`, `sizes`, `defaultWeight` for a fixed weight list such as kettlebells
+
+## Full-screen exercises
+On Push, Pull and Legs each exercise fills the screen below the top bar, and one swipe
+moves exactly one exercise. The height is worked out on the phone, not hard-coded:
+the top bar is measured at startup and each card takes the rest of the screen, so it
+adjusts to installed-app vs. browser, gesture vs. button navigation, and font size.
+The sizing values (`--gap`, button size limits) are at the top of the `<style>` block.
+
 ## Updating the app later
-Edit `index.html`, change `ppl-workout-v1` to `ppl-workout-v2` in `sw.js`, and re-upload.
+Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v4` → `ppl-workout-v5`), and re-upload.
 Phones will pick up the new version the next time they open the app with a connection.
