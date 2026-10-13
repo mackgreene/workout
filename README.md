@@ -44,6 +44,17 @@ the top bar is measured at startup and each card takes the rest of the screen, s
 adjusts to installed-app vs. browser, gesture vs. button navigation, and font size.
 The sizing values (`--gap`, button size limits) are at the top of the `<style>` block.
 
+## Live heart rate
+The heart button at the right of the top bar connects to a Bluetooth heart rate monitor
+(Web Bluetooth; works in Chrome and Samsung Internet on Android, over https only).
+- Any monitor that uses the standard Bluetooth heart rate signal works: chest straps and
+  arm bands from Polar, Garmin, Wahoo, Coospo, etc.
+- Galaxy Watch: it doesn't send heart rate to other apps on its own. Install the free
+  "Heart for Bluetooth" app on the watch and start it before tapping the heart.
+- Drops reconnect automatically; "--" means no reading for 8 seconds. Tap the heart while
+  connected to disconnect. The screen stays on while a monitor is connected.
+- Heart rate is display only; nothing is saved.
+
 ## Updating the app later
-Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v4` → `ppl-workout-v5`), and re-upload.
+Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v5` → `ppl-workout-v6`), and re-upload.
 Phones will pick up the new version the next time they open the app with a connection.

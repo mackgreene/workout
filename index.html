@@ -101,6 +101,38 @@
             color: #000;
         }
 
+        /* Live heart rate in the top bar */
+        .hr-btn {
+            flex: 0 0 auto;
+            min-width: 78px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background-color: #333;
+            color: #999999;
+            border: none;
+            border-radius: 8px;
+            margin: 0 6px;
+            padding: 10px 8px;
+            font-size: 20px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .hr-btn[hidden] { display: none; }
+        .hr-btn svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+        .hr-btn[data-state="connecting"] svg { color: #ff5252; animation: hr-wait 1s ease-in-out infinite; }
+        .hr-btn[data-state="live"] { color: #ffffff; }
+        .hr-btn[data-state="live"] svg { color: #ff5252; animation: hr-beat var(--beat, 1s) ease-out infinite; }
+        .hr-btn[data-state="lost"] svg { color: #ff5252; opacity: 0.4; }
+        @keyframes hr-beat { 0% { transform: scale(1); } 12% { transform: scale(1.28); } 30% { transform: scale(1); } }
+        @keyframes hr-wait { 50% { opacity: 0.25; } }
+        @media (prefers-reduced-motion: reduce) { .hr-btn svg { animation: none !important; } }
+        .hr-info p { margin: 0 0 12px 0; font-size: 20px; line-height: 1.4; color: #cccccc; }
+        .hr-info p:last-child { margin-bottom: 0; }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
@@ -306,6 +338,10 @@
         <button class="nav-btn" onclick="openTab(event, 'push')">Push</button>
         <button class="nav-btn" onclick="openTab(event, 'pull')">Pull</button>
         <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
+        <button id="hr_btn" class="hr-btn" data-state="idle" aria-label="Heart rate monitor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <span id="hr_val">HR</span>
+        </button>
     </div>
 
     <div class="container">
@@ -324,6 +360,12 @@
                 <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time.</li>
                 <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
+
+            <h2>Heart Rate</h2>
+            <div id="hr_info" class="summary-card hr-info">
+                <p>Tap the heart in the top bar to connect a Bluetooth heart rate monitor. Your heart rate then shows in the bar on every screen, and the screen stays on while it's connected.</p>
+                <p>Works with chest straps and arm bands (Polar, Garmin, Wahoo, Coospo and similar). For a Galaxy Watch, install the free <strong>Heart for Bluetooth</strong> app on the watch and start it before you tap the heart.</p>
+            </div>
 
             <h2>Last Workout Summary</h2>
             <div id="summary_content"></div>
@@ -643,6 +685,161 @@
         setNavHeight();
         if ('ResizeObserver' in window) new ResizeObserver(setNavHeight).observe(navBar);
         window.addEventListener('resize', setNavHeight);
+
+        // ---------- Live heart rate (Bluetooth) ----------
+        // Connects to any monitor that sends the standard Bluetooth heart rate signal: chest
+        // straps, arm bands, or a Galaxy Watch running a broadcast app. Display only, nothing saved.
+        const hr = {
+            btn: document.getElementById('hr_btn'),
+            val: document.getElementById('hr_val'),
+            device: null,
+            busy: false,         // a connection attempt is in progress
+            wanted: false,       // true while you want it connected, so drops reconnect on their own
+            retries: 0,
+            retryTimer: null,
+            staleTimer: null,
+            wakeLock: null
+        };
+        const HR_MAX_RETRIES = 5;
+        const HR_STALE_MS = 8000; // no reading for this long shows "--"
+
+        function hrSetState(state, bpm) {
+            hr.btn.dataset.state = state; // idle | connecting | live | lost
+            if (state === 'live') {
+                hr.val.textContent = bpm;
+                const clamped = Math.max(30, Math.min(220, bpm));
+                hr.btn.style.setProperty('--beat', (60 / clamped).toFixed(2) + 's'); // heart pulses at your BPM
+            } else {
+                hr.val.textContent = state === 'idle' ? 'HR' : '--';
+            }
+        }
+
+        function hrStaleSoon() {
+            clearTimeout(hr.staleTimer);
+            hr.staleTimer = setTimeout(() => hrSetState('lost'), HR_STALE_MS);
+        }
+
+        // Standard heart rate measurement: byte 0 = flags; bit 0 says whether BPM is 1 or 2 bytes.
+        function hrOnValue(e) {
+            const v = e.target.value;
+            const bpm = (v.getUint8(0) & 1) ? v.getUint16(1, true) : v.getUint8(1);
+            if (!bpm) { hrSetState('lost'); return; } // 0 = sensor has no skin contact
+            hr.retries = 0;
+            hrSetState('live', bpm);
+            hrStaleSoon();
+        }
+
+        async function hrKeepAwake(on) {
+            try {
+                if (on && !hr.wakeLock && 'wakeLock' in navigator && !document.hidden) {
+                    hr.wakeLock = await navigator.wakeLock.request('screen');
+                    hr.wakeLock.addEventListener('release', () => { hr.wakeLock = null; });
+                } else if (!on && hr.wakeLock) {
+                    const lock = hr.wakeLock;
+                    hr.wakeLock = null;
+                    await lock.release();
+                }
+            } catch (e) { /* screen just follows its normal timeout */ }
+        }
+
+        async function hrConnect() {
+            clearTimeout(hr.retryTimer);
+            if (!hr.device || hr.busy) return;
+            hr.busy = true;
+            hrSetState('connecting');
+            const device = hr.device;
+            try {
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('heart_rate');
+                const ch = await service.getCharacteristic('heart_rate_measurement');
+                ch.addEventListener('characteristicvaluechanged', hrOnValue);
+                await ch.startNotifications();
+                if (hr.device !== device) { // disconnected while this was connecting
+                    device.gatt.disconnect();
+                    hr.busy = false;
+                    return;
+                }
+                hrKeepAwake(true);
+                hrStaleSoon();
+                hr.busy = false;
+            } catch (err) {
+                hr.busy = false;
+                hrRetry();
+            }
+        }
+
+        function hrRetry() {
+            if (!hr.wanted || !hr.device) return;
+            if (document.hidden) { hrSetState('lost'); return; } // tries again when the app is back on screen
+            if (hr.retries >= HR_MAX_RETRIES) { hrDisconnect(); return; } // give up; tap the heart to pick again
+            const delay = Math.min(1000 * Math.pow(2, hr.retries), 10000);
+            hr.retries++;
+            hrSetState('connecting');
+            clearTimeout(hr.retryTimer);
+            hr.retryTimer = setTimeout(hrConnect, delay);
+        }
+
+        function hrOnDisconnect() {
+            clearTimeout(hr.staleTimer);
+            hrRetry();
+        }
+
+        function hrDisconnect() {
+            hr.wanted = false;
+            clearTimeout(hr.retryTimer);
+            clearTimeout(hr.staleTimer);
+            const d = hr.device;
+            hr.device = null;
+            if (d) {
+                d.removeEventListener('gattserverdisconnected', hrOnDisconnect);
+                try { if (d.gatt.connected) d.gatt.disconnect(); } catch (e) { /* already gone */ }
+            }
+            hrKeepAwake(false);
+            hrSetState('idle');
+        }
+
+        if (!('bluetooth' in navigator)) {
+            hr.btn.hidden = true;
+            document.getElementById('hr_info').innerHTML =
+                '<p>This browser can\'t connect to Bluetooth. Open the app in Chrome or Samsung Internet to see your heart rate.</p>';
+        }
+
+        hr.btn.addEventListener('click', async () => {
+            const state = hr.btn.dataset.state;
+            if (hr.device && hr.device.gatt.connected && state !== 'connecting') {
+                if (confirm('Disconnect the heart rate monitor?')) hrDisconnect();
+                return;
+            }
+            if (state === 'connecting') return; // already working on it
+            if (hr.device) {                    // known monitor dropped out: reconnect without the picker
+                hr.wanted = true;
+                hr.retries = 0;
+                hrConnect();
+                return;
+            }
+            let device;
+            try {
+                device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
+            } catch (err) {
+                return; // picker closed without choosing
+            }
+            hr.device = device;
+            hr.wanted = true;
+            hr.retries = 0;
+            device.addEventListener('gattserverdisconnected', hrOnDisconnect);
+            hrConnect();
+        });
+
+        // Phones pause Bluetooth for apps that leave the screen. Pick it back up on return.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden || !hr.wanted || !hr.device) return;
+            if (!hr.device.gatt.connected) {
+                hr.retries = 0;
+                hrConnect();
+            } else {
+                hrKeepAwake(true); // the screen-on lock is dropped whenever the app is hidden
+            }
+        });
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.

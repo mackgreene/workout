@@ -1,5 +1,5 @@
 // Bump this version whenever you change index.html so phones pick up the update.
-const CACHE = 'ppl-workout-v4';
+const CACHE = 'ppl-workout-v5';
 
 const ASSETS = [
   './',
