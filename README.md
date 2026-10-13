@@ -33,6 +33,8 @@ An "Install app" button also appears at the top of the Info tab once the browser
 ## Changing the plan
 Exercises are a short list near the top of the script in `index.html`. Each entry can take:
 - `sets: 2` for two working sets with their own weight and reps (all three days use this)
+- `step: 2.5` for 2.5 lb steps instead of 5 (cable exercises: Cable Lateral Raises,
+  Cable Overhead Triceps Extensions, Pallof Press)
 - `warmups: 1` for a single 75% warmup (the 2nd exercise of a muscle group:
   Pec Deck, Overhead Triceps Extensions, Machine High Row, Leg Press)
 - `unit`, `sizes`, `defaultWeight` for a fixed weight list such as kettlebells
@@ -44,17 +46,13 @@ the top bar is measured at startup and each card takes the rest of the screen, s
 adjusts to installed-app vs. browser, gesture vs. button navigation, and font size.
 The sizing values (`--gap`, button size limits) are at the top of the `<style>` block.
 
-## Live heart rate
-The heart button at the right of the top bar connects to a Bluetooth heart rate monitor
-(Web Bluetooth; works in Chrome and Samsung Internet on Android, over https only).
-- Any monitor that uses the standard Bluetooth heart rate signal works: chest straps and
-  arm bands from Polar, Garmin, Wahoo, Coospo, etc.
-- Galaxy Watch: it doesn't send heart rate to other apps on its own. Install the free
-  "Heart for Bluetooth" app on the watch and start it before tapping the heart.
-- Drops reconnect automatically; "--" means no reading for 8 seconds. Tap the heart while
-  connected to disconnect. The screen stays on while a monitor is connected.
-- Heart rate is display only; nothing is saved.
+## Rest timer
+Every exercise has a **Rest 3:00** button at the bottom. It opens a full-screen countdown:
+- −1:00 / +1:00 change the time left; the circle in the middle restarts from 3:00; pause is under the time.
+- At 0:00 the phone buzzes and beeps, and the screen shows how long you've gone over.
+- Close with the X or Android's back gesture. The screen stays on while the timer is open.
+- The length is `REST_SECONDS` at the top of the script in `index.html`.
 
 ## Updating the app later
-Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v5` → `ppl-workout-v6`), and re-upload.
+Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v6` → `ppl-workout-v7`), and re-upload.
 Phones will pick up the new version the next time they open the app with a connection.

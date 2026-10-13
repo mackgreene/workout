@@ -32,7 +32,7 @@
             --page-h: calc(var(--screen-h) - var(--nav-h) - 2 * var(--gap) - env(safe-area-inset-bottom, 0px));
             /* +/- buttons get taller when the screen has room, wider only as far as the width allows */
             --btn-h: clamp(48px, calc(var(--page-h) * 0.085), 62px);
-            --btn-w: clamp(48px, 14.5vw, 62px);
+            --btn-w: clamp(46px, 13.5vw, 60px);
         }
         @supports (height: 100svh) {
             :root { --screen-h: 100svh; }
@@ -101,37 +101,6 @@
             color: #000;
         }
 
-        /* Live heart rate in the top bar */
-        .hr-btn {
-            flex: 0 0 auto;
-            min-width: 78px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            background-color: #333;
-            color: #999999;
-            border: none;
-            border-radius: 8px;
-            margin: 0 6px;
-            padding: 10px 8px;
-            font-size: 20px;
-            font-weight: bold;
-            font-variant-numeric: tabular-nums;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .hr-btn[hidden] { display: none; }
-        .hr-btn svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
-        .hr-btn[data-state="connecting"] svg { color: #ff5252; animation: hr-wait 1s ease-in-out infinite; }
-        .hr-btn[data-state="live"] { color: #ffffff; }
-        .hr-btn[data-state="live"] svg { color: #ff5252; animation: hr-beat var(--beat, 1s) ease-out infinite; }
-        .hr-btn[data-state="lost"] svg { color: #ff5252; opacity: 0.4; }
-        @keyframes hr-beat { 0% { transform: scale(1); } 12% { transform: scale(1.28); } 30% { transform: scale(1); } }
-        @keyframes hr-wait { 50% { opacity: 0.25; } }
-        @media (prefers-reduced-motion: reduce) { .hr-btn svg { animation: none !important; } }
-        .hr-info p { margin: 0 0 12px 0; font-size: 20px; line-height: 1.4; color: #cccccc; }
-        .hr-info p:last-child { margin-bottom: 0; }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -183,19 +152,19 @@
         /* Control rows for Weight and Reps */
         .control-row {
             display: flex;
-            flex-wrap: wrap;
-            row-gap: 6px;
+            flex-wrap: nowrap;   /* never break onto two lines; that would push the card past the screen */
             align-items: center;
             justify-content: space-between;
             background-color: #2a2a2a;
-            padding: 7px 10px;
+            padding: 7px 8px;
             border-radius: 8px;
             margin-bottom: 6px;
         }
         .control-label {
             font-size: 22px;
             font-weight: bold;
-            width: 88px;
+            flex: 0 0 auto;   /* only as wide as "Weight:" so the buttons get the room */
+            margin-right: 4px;
         }
         .control-actions {
             display: flex;
@@ -329,6 +298,196 @@
             touch-action: manipulation;
         }
         .btn-install:active { background-color: #388E3C; }
+
+        /* Half-step weights (2.5 lb cables): smaller ".5" so 3-digit weights still fit the row */
+        .val-display .dec { font-size: 0.68em; }
+
+        /* ---------- Rest timer ---------- */
+        /* Bottom of each exercise: target note on the left, rest button on the right */
+        .card-foot {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 6px;
+        }
+        .card-foot .notes { flex: 1; margin-top: 0; min-width: 0; }
+        .rest-start {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 52px;
+            padding: 0 16px;
+            background-color: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            font-size: 21px;
+            font-weight: bold;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .rest-start:active { background-color: #223322; }
+        .rest-start svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .rest {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background-color: #121212;
+            padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)) 12px;
+            box-sizing: border-box;
+            display: flex;
+            touch-action: none;          /* swipes on the timer don't scroll the workout behind it */
+            overscroll-behavior: contain;
+            user-select: none;
+            -webkit-user-select: none;
+            --dial: min(80vw, 46svh, 440px);
+        }
+        .rest[hidden] { display: none; }
+        .rest-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e1e1e;
+            border-radius: 28px;
+            padding: 18px 18px 26px 18px;
+            border: 2px solid transparent;
+        }
+        .rest-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .rest-title { padding: 6px 0 0 8px; min-width: 0; }
+        .rest-kicker {
+            display: block;
+            font-size: 15px;
+            line-height: 1.3;
+            color: #999999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .rest-name {
+            display: block;
+            font-size: 22px;
+            line-height: 1.25;
+            color: #ffffff;
+        }
+        .rest-close {
+            flex-shrink: 0;
+            width: 56px;
+            height: 56px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .rest-close svg { width: 30px; height: 30px; fill: currentColor; }
+        .rest-close:active { background-color: #2a2a2a; }
+
+        .rest-dial {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rest-ring-wrap {
+            position: relative;
+            width: var(--dial);
+            height: var(--dial);
+        }
+        .rest-ring { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+        .rest-ring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+        .rest-track { stroke: #3a3a3a; }
+        .rest-progress { stroke: #4CAF50; }
+        .rest-center {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .rest-status {
+            font-size: 16px;
+            line-height: 1.2;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #999999;
+            height: 20px;
+        }
+        .rest-time {
+            font-size: calc(var(--dial) * 0.25);
+            line-height: 1.05;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -1px;
+            color: #ffffff;
+        }
+        .rest-pause {
+            width: 72px;
+            height: 72px;
+            margin-top: 4px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .rest-pause:active { background-color: #2a2a2a; }
+        .rest-pause svg { width: 48px; height: 48px; fill: currentColor; }
+        .rest .icon-play { display: none; }
+        .rest[data-state="paused"] .icon-play { display: block; }
+        .rest[data-state="paused"] .icon-pause { display: none; }
+        .rest[data-state="paused"] .rest-time { animation: rest-blink 1.2s step-end infinite; }
+        .rest[data-state="done"] .rest-pause { visibility: hidden; }
+        .rest[data-state="done"] .rest-time,
+        .rest[data-state="done"] .rest-status { color: #4CAF50; }
+        .rest[data-state="done"] .rest-time { font-size: calc(var(--dial) * 0.2); } /* room for the "+" */
+        .rest[data-state="done"] .rest-panel { border-color: #4CAF50; animation: rest-glow 1.6s ease-in-out infinite; }
+        @keyframes rest-blink { 50% { opacity: 0.25; } }
+        @keyframes rest-glow { 50% { box-shadow: 0 0 28px rgba(76, 175, 80, 0.45); } }
+        @media (prefers-reduced-motion: reduce) {
+            .rest[data-state="done"] .rest-panel { animation: none; }
+        }
+
+        .rest-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .rest-pill, .rest-round {
+            height: 88px;
+            border: none;
+            background-color: #2a2a2a;
+            color: #ffffff;
+            font-size: 30px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .rest-pill { flex: 1; border-radius: 44px; }
+        .rest-round {
+            flex: 0 0 88px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rest-round svg { width: 34px; height: 34px; fill: currentColor; }
+        .rest-pill:active, .rest-round:active { background-color: #3a3a3a; }
+        .rest-pill:disabled { color: #555555; }
     </style>
 </head>
 <body>
@@ -338,10 +497,6 @@
         <button class="nav-btn" onclick="openTab(event, 'push')">Push</button>
         <button class="nav-btn" onclick="openTab(event, 'pull')">Pull</button>
         <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
-        <button id="hr_btn" class="hr-btn" data-state="idle" aria-label="Heart rate monitor">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-            <span id="hr_val">HR</span>
-        </button>
     </div>
 
     <div class="container">
@@ -357,15 +512,10 @@
                 <li><strong>Warmup 1:</strong> 50% weight (auto-calculated).</li>
                 <li><strong>Warmup 2:</strong> 75% weight (auto-calculated). The 2nd exercise for a muscle group skips Warmup 1 and does only this one.</li>
                 <li><strong>Working Sets:</strong> 2 sets at 100% weight to <strong>Absolute Failure</strong>, dropping the weight on Set 2 if needed.</li>
-                <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time.</li>
+                <li><strong>Rest:</strong> 3 minutes between sets. Tap <strong>Rest 3:00</strong> at the bottom of any exercise.</li>
+                <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time (2.5 lbs on cable exercises).</li>
                 <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
-
-            <h2>Heart Rate</h2>
-            <div id="hr_info" class="summary-card hr-info">
-                <p>Tap the heart in the top bar to connect a Bluetooth heart rate monitor. Your heart rate then shows in the bar on every screen, and the screen stays on while it's connected.</p>
-                <p>Works with chest straps and arm bands (Polar, Garmin, Wahoo, Coospo and similar). For a Galaxy Watch, install the free <strong>Heart for Bluetooth</strong> app on the watch and start it before you tap the heart.</p>
-            </div>
 
             <h2>Last Workout Summary</h2>
             <div id="summary_content"></div>
@@ -387,21 +537,63 @@
         </div>
     </div>
 
+    <!-- REST TIMER (full screen, opened from any exercise) -->
+    <div id="rest" class="rest" data-state="running" role="dialog" aria-modal="true" aria-label="Rest timer" hidden>
+        <div class="rest-panel">
+            <div class="rest-top">
+                <div class="rest-title">
+                    <span class="rest-kicker">Rest</span>
+                    <span id="rest_name" class="rest-name"></span>
+                </div>
+                <button id="rest_close" class="rest-close" aria-label="Close timer">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div class="rest-dial">
+                <div class="rest-ring-wrap">
+                    <svg class="rest-ring" viewBox="0 0 200 200" aria-hidden="true">
+                        <circle class="rest-track" cx="100" cy="100" r="94"/>
+                        <circle id="rest_progress" class="rest-progress" cx="100" cy="100" r="94" pathLength="1000" stroke-dasharray="1000 1000"/>
+                    </svg>
+                    <div class="rest-center">
+                        <div id="rest_status" class="rest-status"></div>
+                        <div id="rest_time" class="rest-time">03:00</div>
+                        <button id="rest_pause" class="rest-pause" aria-label="Pause or resume">
+                            <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+                            <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="rest-controls">
+                <button id="rest_minus" class="rest-pill" aria-label="Subtract one minute">&minus;1:00</button>
+                <button id="rest_restart" class="rest-round" aria-label="Restart from 3:00">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+                </button>
+                <button id="rest_plus" class="rest-pill" aria-label="Add one minute">+1:00</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Rest timer length in seconds.
+        const REST_SECONDS = 180;
+
         // Standard kettlebell sizes in kg. Edit this list to match the bells at your gym.
         const KETTLEBELLS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40, 44, 48];
 
         // Exercises default to lbs in 5 lb steps, 1 working set, and 2 warmups (50% + 75%). Options:
         //   sets: 2                   two working sets, each with its own weight and reps
         //   warmups: 1                single 75% warmup (for the 2nd exercise of a muscle group)
+        //   step: 2.5                 weight goes up/down by 2.5 lbs (cable exercises)
         //   unit / sizes / defaultWeight   fixed weight list, e.g. kettlebells
         const exercises = {
             push: [
                 { id: 'inc_press', name: 'Incline Machine Press', sets: 2 },
                 { id: 'pec_deck', name: 'Pec Deck', sets: 2, warmups: 1 },
-                { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2 },
+                { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2, step: 2.5 },
                 { id: 'tri_push', name: 'Machine Triceps Pushdown', sets: 2 },
-                { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1 }
+                { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1, step: 2.5 }
             ],
             pull: [
                 { id: 'lat_pull', name: 'Lat Pulldown', sets: 2 },
@@ -415,7 +607,7 @@
                 { id: 'kb_split_squat', name: 'KB Bulgarian Split Squats', sets: 2, unit: 'kg', sizes: KETTLEBELLS, defaultWeight: 16 },
                 { id: 'leg_press', name: 'Machine Leg Press', sets: 2, warmups: 1 },  // 2nd quad exercise
                 { id: 'calf_raise', name: 'Machine Calf Raises', sets: 2 },
-                { id: 'pallof', name: 'Pallof Press', sets: 2 }
+                { id: 'pallof', name: 'Pallof Press', sets: 2, step: 2.5 }                        // cable
             ]
         };
 
@@ -465,14 +657,27 @@
             }
             return best;
         }
-        // Move one step up (+1) or down (-1): next bell for fixed sizes, 5 lbs otherwise.
+        function stepOf(ex) { return ex.step || 5; }
+        // Round to the exercise's step (5 or 2.5 lbs), avoiding floating-point leftovers.
+        function roundToStep(ex, w) { return Math.round(Math.round(w / stepOf(ex)) * stepOf(ex) * 10) / 10; }
+        // 102.5 -> "102.5", 100 -> "100"
+        function fmtWeight(w) { return Number.isInteger(w) ? String(w) : w.toFixed(1); }
+        // Weight readouts keep the number in data-v; a half step shows a smaller ".5".
+        function showWeight(el, w) {
+            el.dataset.v = w;
+            const [whole, dec] = fmtWeight(w).split('.');
+            el.innerHTML = dec ? `${whole}<span class="dec">.${dec}</span>` : whole;
+        }
+        function readWeight(el) { return parseFloat(el.dataset.v !== undefined ? el.dataset.v : el.textContent); }
+
+        // Move one step up (+1) or down (-1): next bell for fixed sizes, the exercise's step otherwise.
         function stepWeight(ex, current, dir) {
             if (ex.sizes) {
                 let i = ex.sizes.indexOf(nearestSize(ex.sizes, current)) + dir;
                 i = Math.max(0, Math.min(ex.sizes.length - 1, i));
                 return ex.sizes[i];
             }
-            return Math.max(0, current + dir * 5);
+            return Math.max(0, roundToStep(ex, current + dir * stepOf(ex)));
         }
 
         // Storage keys: Set 1 uses "<id>_weight" / "<id>_reps" (so existing data carries over),
@@ -482,7 +687,7 @@
         function warmupsOf(ex) { return ex.warmups === undefined ? 2 : ex.warmups; }
 
         function loadWeight(ex, set, fallback) {
-            let w = parseInt(store.get(key(ex, set, 'weight'), fallback));
+            let w = parseFloat(store.get(key(ex, set, 'weight'), fallback));
             if (isNaN(w)) w = fallback;
             if (ex.sizes) w = nearestSize(ex.sizes, w);
             return w;
@@ -526,7 +731,7 @@
                 warmups += `<div class="warmup-text"><span>Warmup (75%):</span><strong><span id="${ex.id}_wu2"></span> ${unit}</strong></div>`;
             }
 
-            const target = sets > 1 ? `Target: ${sets} Working Sets to Failure` : 'Target: 1 Working Set to Failure';
+            const target = sets > 1 ? `Target: ${sets} sets to failure` : 'Target: 1 set to failure';
 
             return `
             <div class="exercise-card">
@@ -536,7 +741,13 @@
                     ${controls}
                     <div class="warmup-box">${warmups}</div>
                 </div>
+                <div class="card-foot">
                 <div class="notes">${target}</div>
+                <button class="rest-start" onclick="restOpen('${ex.id}')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.96 8.96 0 0 0 12 4a9 9 0 1 0 9 9c0-2.12-.74-4.07-1.97-5.61zM12 20a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
+                    Rest ${fmtClock(REST_SECONDS * 1000).replace(/^0/, '')}
+                </button>
+                </div>
             </div>`;
         }
 
@@ -564,7 +775,7 @@
 
                         const weightEl = document.getElementById(key(ex, s, 'weight'));
                         const repsEl = document.getElementById(key(ex, s, 'reps'));
-                        if (weightEl) weightEl.innerText = weight;
+                        if (weightEl) showWeight(weightEl, weight);
                         if (repsEl) repsEl.innerText = reps;
                     }
                     calcWarmups(ex, set1Weight);
@@ -581,7 +792,7 @@
             const el = document.getElementById(key(ex, set, type));
             if (!el) return;
             
-            let val = parseInt(el.innerText);
+            let val = type === 'weight' ? readWeight(el) : parseInt(el.innerText);
             if (type === 'weight') {
                 const prev = val;
                 val = stepWeight(ex, val, dir);
@@ -591,16 +802,17 @@
                     // weight it stays where you put it until you line it back up.
                     for (let s = 2; s <= setsOf(ex); s++) {
                         const other = document.getElementById(key(ex, s, 'weight'));
-                        if (other && parseInt(other.innerText) === prev) {
-                            other.innerText = val;
+                        if (other && readWeight(other) === prev) {
+                            showWeight(other, val);
                             store.set(key(ex, s, 'weight'), val);
                         }
                     }
                 }
+                showWeight(el, val);
             } else {
                 val = Math.max(0, val + dir); // Prevent negative numbers
+                el.innerText = val;
             }
-            el.innerText = val;
             store.set(key(ex, set, type), val);
 
             // Instantly update summary when values change
@@ -608,14 +820,15 @@
         }
 
         function calcWarmups(ex, weight) {
-            let w = parseInt(weight);
+            let w = parseFloat(weight);
             let wu1, wu2;
             if (ex.sizes) {
                 wu1 = nearestSize(ex.sizes, w * 0.5);
                 wu2 = nearestSize(ex.sizes, w * 0.75);
             } else {
-                wu1 = Math.round((w * 0.5) / 5) * 5;
-                wu2 = Math.round((w * 0.75) / 5) * 5;
+                // Rounded to the exercise's step: 5 lbs, or 2.5 lbs on cables
+                wu1 = fmtWeight(roundToStep(ex, w * 0.5));
+                wu2 = fmtWeight(roundToStep(ex, w * 0.75));
             }
             
             let wu1El = document.getElementById(ex.id + '_wu1');
@@ -638,7 +851,7 @@
                     for (let s = 1; s <= setsOf(ex); s++) {
                         const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
                         const reps = store.get(key(ex, s, 'reps'), 6);
-                        lines += `<div>${weight} ${unitOf(ex)} &times; ${reps}</div>`;
+                        lines += `<div>${fmtWeight(weight)} ${unitOf(ex)} &times; ${reps}</div>`;
                     }
                     
                     html += `
@@ -686,160 +899,184 @@
         if ('ResizeObserver' in window) new ResizeObserver(setNavHeight).observe(navBar);
         window.addEventListener('resize', setNavHeight);
 
-        // ---------- Live heart rate (Bluetooth) ----------
-        // Connects to any monitor that sends the standard Bluetooth heart rate signal: chest
-        // straps, arm bands, or a Galaxy Watch running a broadcast app. Display only, nothing saved.
-        const hr = {
-            btn: document.getElementById('hr_btn'),
-            val: document.getElementById('hr_val'),
-            device: null,
-            busy: false,         // a connection attempt is in progress
-            wanted: false,       // true while you want it connected, so drops reconnect on their own
-            retries: 0,
-            retryTimer: null,
-            staleTimer: null,
-            wakeLock: null
+        // ---------- Rest timer ----------
+        // Counts from an end time rather than ticking, so it stays right even if the phone
+        // sleeps or you switch apps. The screen stays on while the timer is open.
+        const rest = {
+            el: document.getElementById('rest'),
+            name: document.getElementById('rest_name'),
+            time: document.getElementById('rest_time'),
+            status: document.getElementById('rest_status'),
+            progress: document.getElementById('rest_progress'),
+            minus: document.getElementById('rest_minus'),
+            open: false,
+            state: 'running',   // running | paused | done
+            endAt: 0,           // when it hits 0:00 (running), or when it did (done)
+            leftMs: 0,          // time left while paused
+            totalMs: 1,         // full length of the ring
+            raf: 0,
+            wakeLock: null,
+            audio: null,
+            shown: ''
         };
-        const HR_MAX_RETRIES = 5;
-        const HR_STALE_MS = 8000; // no reading for this long shows "--"
 
-        function hrSetState(state, bpm) {
-            hr.btn.dataset.state = state; // idle | connecting | live | lost
-            if (state === 'live') {
-                hr.val.textContent = bpm;
-                const clamped = Math.max(30, Math.min(220, bpm));
-                hr.btn.style.setProperty('--beat', (60 / clamped).toFixed(2) + 's'); // heart pulses at your BPM
+        function pad2(n) { return String(n).padStart(2, '0'); }
+        function fmtClock(ms, roundDown) {
+            const s = Math.max(0, roundDown ? Math.floor(ms / 1000) : Math.ceil(ms / 1000));
+            return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60);
+        }
+        function restLeft() { return rest.state === 'running' ? rest.endAt - Date.now() : rest.leftMs; }
+
+        function restRender() {
+            let text, frac, status;
+            if (rest.state === 'done') {
+                text = '+' + fmtClock(Date.now() - rest.endAt, true); // how long you've gone over
+                frac = 1;
+                status = "Time's up";
             } else {
-                hr.val.textContent = state === 'idle' ? 'HR' : '--';
+                const left = Math.max(0, restLeft());
+                text = fmtClock(left);
+                frac = Math.min(1, left / rest.totalMs);
+                status = rest.state === 'paused' ? 'Paused' : '';
             }
+            rest.progress.setAttribute('stroke-dasharray', (frac * 1000).toFixed(1) + ' 1000');
+            if (text !== rest.shown) { rest.time.textContent = text; rest.shown = text; }
+            rest.status.textContent = status;
+            rest.el.dataset.state = rest.state;
+            rest.minus.disabled = rest.state === 'done';
         }
 
-        function hrStaleSoon() {
-            clearTimeout(hr.staleTimer);
-            hr.staleTimer = setTimeout(() => hrSetState('lost'), HR_STALE_MS);
+        function restTick() {
+            rest.raf = 0;
+            if (!rest.open) return;
+            if (rest.state === 'running' && restLeft() <= 0) restFinish(true);
+            restRender();
+            if (rest.state !== 'paused' && !document.hidden) rest.raf = requestAnimationFrame(restTick);
+        }
+        function restKick() { if (!rest.raf) rest.raf = requestAnimationFrame(restTick); }
+
+        function restStart(ms) {
+            rest.state = 'running';
+            rest.totalMs = ms;
+            rest.endAt = Date.now() + ms;
+            restRender();
+            restKick();
         }
 
-        // Standard heart rate measurement: byte 0 = flags; bit 0 says whether BPM is 1 or 2 bytes.
-        function hrOnValue(e) {
-            const v = e.target.value;
-            const bpm = (v.getUint8(0) & 1) ? v.getUint16(1, true) : v.getUint8(1);
-            if (!bpm) { hrSetState('lost'); return; } // 0 = sensor has no skin contact
-            hr.retries = 0;
-            hrSetState('live', bpm);
-            hrStaleSoon();
+        function restFinish(alertMe) {
+            if (rest.state === 'running') rest.endAt = Math.min(rest.endAt, Date.now());
+            else rest.endAt = Date.now();
+            rest.state = 'done';
+            if (alertMe) restAlert();
         }
 
-        async function hrKeepAwake(on) {
+        // -1:00 / +1:00. Taking off more than is left ends the rest (quietly, since you asked).
+        function restAdjust(deltaMs) {
+            if (rest.state === 'done') {
+                if (deltaMs > 0) restStart(deltaMs); // "give me another minute"
+                return;
+            }
+            const left = Math.max(0, restLeft() + deltaMs);
+            rest.totalMs = Math.max(left, rest.totalMs + deltaMs, 1);
+            if (rest.state === 'running') rest.endAt = Date.now() + left;
+            else rest.leftMs = left;
+            if (left <= 0) restFinish(false);
+            restRender();
+            restKick();
+        }
+
+        function restTogglePause() {
+            if (rest.state === 'running') {
+                rest.leftMs = Math.max(0, rest.endAt - Date.now());
+                rest.state = 'paused';
+            } else if (rest.state === 'paused') {
+                rest.endAt = Date.now() + rest.leftMs;
+                rest.state = 'running';
+            }
+            restRender();
+            restKick();
+        }
+
+        // Buzz and beep when time is up. The sound is set up on the tap that opened the
+        // timer, because phones only allow web sounds after you've touched the page.
+        function restUnlockSound() {
             try {
-                if (on && !hr.wakeLock && 'wakeLock' in navigator && !document.hidden) {
-                    hr.wakeLock = await navigator.wakeLock.request('screen');
-                    hr.wakeLock.addEventListener('release', () => { hr.wakeLock = null; });
-                } else if (!on && hr.wakeLock) {
-                    const lock = hr.wakeLock;
-                    hr.wakeLock = null;
+                if (!rest.audio) rest.audio = new (window.AudioContext || window.webkitAudioContext)();
+                if (rest.audio.state === 'suspended') rest.audio.resume();
+            } catch (e) { rest.audio = null; }
+        }
+        function restAlert() {
+            try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]); } catch (e) { /* no vibration */ }
+            const ctx = rest.audio;
+            if (!ctx) return;
+            try {
+                ctx.resume();
+                const t0 = ctx.currentTime + 0.05;
+                [0, 0.35, 0.7].forEach(off => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = 880;
+                    gain.gain.setValueAtTime(0.0001, t0 + off);
+                    gain.gain.exponentialRampToValueAtTime(0.6, t0 + off + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + off + 0.25);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(t0 + off);
+                    osc.stop(t0 + off + 0.3);
+                });
+            } catch (e) { /* no sound */ }
+        }
+
+        async function restKeepAwake(on) {
+            try {
+                if (on && !rest.wakeLock && 'wakeLock' in navigator && !document.hidden) {
+                    rest.wakeLock = await navigator.wakeLock.request('screen');
+                    rest.wakeLock.addEventListener('release', () => { rest.wakeLock = null; });
+                } else if (!on && rest.wakeLock) {
+                    const lock = rest.wakeLock;
+                    rest.wakeLock = null;
                     await lock.release();
                 }
-            } catch (e) { /* screen just follows its normal timeout */ }
+            } catch (e) { /* screen follows its normal timeout */ }
         }
 
-        async function hrConnect() {
-            clearTimeout(hr.retryTimer);
-            if (!hr.device || hr.busy) return;
-            hr.busy = true;
-            hrSetState('connecting');
-            const device = hr.device;
-            try {
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('heart_rate');
-                const ch = await service.getCharacteristic('heart_rate_measurement');
-                ch.addEventListener('characteristicvaluechanged', hrOnValue);
-                await ch.startNotifications();
-                if (hr.device !== device) { // disconnected while this was connecting
-                    device.gatt.disconnect();
-                    hr.busy = false;
-                    return;
-                }
-                hrKeepAwake(true);
-                hrStaleSoon();
-                hr.busy = false;
-            } catch (err) {
-                hr.busy = false;
-                hrRetry();
-            }
+        function restOpen(id) {
+            const ex = findEx(id);
+            rest.name.textContent = ex ? ex.name : '';
+            rest.open = true;
+            rest.el.hidden = false;
+            restUnlockSound();
+            restStart(REST_SECONDS * 1000);
+            restKeepAwake(true);
+            // So Android's back gesture closes the timer instead of leaving the app
+            history.pushState({ restTimer: true }, '');
         }
 
-        function hrRetry() {
-            if (!hr.wanted || !hr.device) return;
-            if (document.hidden) { hrSetState('lost'); return; } // tries again when the app is back on screen
-            if (hr.retries >= HR_MAX_RETRIES) { hrDisconnect(); return; } // give up; tap the heart to pick again
-            const delay = Math.min(1000 * Math.pow(2, hr.retries), 10000);
-            hr.retries++;
-            hrSetState('connecting');
-            clearTimeout(hr.retryTimer);
-            hr.retryTimer = setTimeout(hrConnect, delay);
+        function restClose(fromBack) {
+            if (!rest.open) return;
+            rest.open = false;
+            rest.el.hidden = true;
+            if (rest.raf) cancelAnimationFrame(rest.raf);
+            rest.raf = 0;
+            restKeepAwake(false);
+            if (!fromBack && history.state && history.state.restTimer) history.back();
         }
 
-        function hrOnDisconnect() {
-            clearTimeout(hr.staleTimer);
-            hrRetry();
-        }
-
-        function hrDisconnect() {
-            hr.wanted = false;
-            clearTimeout(hr.retryTimer);
-            clearTimeout(hr.staleTimer);
-            const d = hr.device;
-            hr.device = null;
-            if (d) {
-                d.removeEventListener('gattserverdisconnected', hrOnDisconnect);
-                try { if (d.gatt.connected) d.gatt.disconnect(); } catch (e) { /* already gone */ }
-            }
-            hrKeepAwake(false);
-            hrSetState('idle');
-        }
-
-        if (!('bluetooth' in navigator)) {
-            hr.btn.hidden = true;
-            document.getElementById('hr_info').innerHTML =
-                '<p>This browser can\'t connect to Bluetooth. Open the app in Chrome or Samsung Internet to see your heart rate.</p>';
-        }
-
-        hr.btn.addEventListener('click', async () => {
-            const state = hr.btn.dataset.state;
-            if (hr.device && hr.device.gatt.connected && state !== 'connecting') {
-                if (confirm('Disconnect the heart rate monitor?')) hrDisconnect();
-                return;
-            }
-            if (state === 'connecting') return; // already working on it
-            if (hr.device) {                    // known monitor dropped out: reconnect without the picker
-                hr.wanted = true;
-                hr.retries = 0;
-                hrConnect();
-                return;
-            }
-            let device;
-            try {
-                device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
-            } catch (err) {
-                return; // picker closed without choosing
-            }
-            hr.device = device;
-            hr.wanted = true;
-            hr.retries = 0;
-            device.addEventListener('gattserverdisconnected', hrOnDisconnect);
-            hrConnect();
-        });
-
-        // Phones pause Bluetooth for apps that leave the screen. Pick it back up on return.
+        document.getElementById('rest_close').addEventListener('click', () => restClose(false));
+        document.getElementById('rest_pause').addEventListener('click', restTogglePause);
+        document.getElementById('rest_minus').addEventListener('click', () => restAdjust(-60000));
+        document.getElementById('rest_plus').addEventListener('click', () => restAdjust(60000));
+        document.getElementById('rest_restart').addEventListener('click', () => restStart(REST_SECONDS * 1000));
+        window.addEventListener('popstate', () => restClose(true));
+        // Coming back to the app: catch up the clock and keep the screen on again.
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden || !hr.wanted || !hr.device) return;
-            if (!hr.device.gatt.connected) {
-                hr.retries = 0;
-                hrConnect();
-            } else {
-                hrKeepAwake(true); // the screen-on lock is dropped whenever the app is hidden
-            }
+            if (document.hidden || !rest.open) return;
+            restKeepAwake(true);
+            if (rest.raf) cancelAnimationFrame(rest.raf); // drop any frame left over from before
+            restTick();
         });
+        // A reload while the timer was open leaves a stale history entry; neutralise it.
+        if (history.state && history.state.restTimer) history.replaceState(null, '');
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.
