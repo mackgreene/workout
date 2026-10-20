@@ -299,6 +299,78 @@
         }
         .btn-install:active { background-color: #388E3C; }
 
+        /* ---------- Finish workout (last screen of each day) ---------- */
+        .finish-date { font-size: 18px; color: #cccccc; margin: -4px 0 6px 0; }
+        .finish-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+        }
+        .finish-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 7px 0;
+            border-bottom: 1px solid #333;
+            font-size: 18px;
+            line-height: 1.3;
+        }
+        .finish-row:last-child { border-bottom: none; }
+        .finish-row .fx-name { min-width: 0; }
+        .finish-row .fx-sets { text-align: right; font-weight: bold; white-space: nowrap; }
+        .finish-status {
+            font-size: 17px;
+            line-height: 1.35;
+            color: #999999;
+            min-height: 46px;
+            margin: 6px 0 8px 0;
+            display: flex;
+            align-items: center;
+        }
+        .finish-status.saved { color: #4CAF50; }
+        .btn-finish, .btn-sheets {
+            width: 100%;
+            min-height: 60px;
+            background-color: #4CAF50;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .btn-finish:active, .btn-sheets:active { background-color: #388E3C; }
+
+        /* ---------- Google Sheets (Info tab) ---------- */
+        .sheets-card p { margin: 0 0 12px 0; font-size: 20px; line-height: 1.4; color: #cccccc; }
+        .sheets-url {
+            box-sizing: border-box;
+            width: 100%;
+            font-size: 17px;
+            padding: 14px 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #2a2a2a;
+            color: #ffffff;
+        }
+        .sheets-url:focus { outline: 2px solid #4CAF50; border-color: #4CAF50; }
+        .btn-sheets.secondary {
+            margin-top: 10px;
+            min-height: 52px;
+            font-size: 19px;
+            background-color: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+        }
+        .btn-sheets.secondary:active { background-color: #223322; }
+        .btn-sheets:disabled { opacity: 0.5; }
+        .sheets-status { margin-top: 12px; font-size: 18px; line-height: 1.4; color: #999999; }
+        .sheets-status.ok { color: #4CAF50; }
+        .sheets-status.err { color: #ff8a80; }
+
         /* Half-step weights (2.5 lb cables): smaller ".5" so 3-digit weights still fit the row */
         .val-display .dec { font-size: 0.68em; }
 
@@ -513,9 +585,21 @@
                 <li><strong>Warmup 2:</strong> 75% weight (auto-calculated). The 2nd exercise for a muscle group skips Warmup 1 and does only this one.</li>
                 <li><strong>Working Sets:</strong> 2 sets at 100% weight to <strong>Absolute Failure</strong>, dropping the weight on Set 2 if needed.</li>
                 <li><strong>Rest:</strong> 3 minutes between sets. Tap <strong>Rest 3:00</strong> at the bottom of any exercise.</li>
+                <li><strong>Finish:</strong> after the last exercise, swipe once more and tap <strong>Save workout</strong>. Save before you bump weights for next time.</li>
                 <li><strong>Progression:</strong> Hit 8 reps? Add 5 lbs for next time (2.5 lbs on cable exercises).</li>
+                <li><strong>Dumbbells:</strong> weight steps through the rack: 2.5 lbs at a time below 40 lbs, then 5 lbs. Warmups round to the nearest dumbbell. Hit 8 reps? Go up one dumbbell.</li>
                 <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
+
+            <h2>Google Sheets</h2>
+            <div class="summary-card sheets-card">
+                <p>Saved workouts are sent to your own Google Sheet. Paste the Web app link from the setup steps, then tap Connect.</p>
+                <input id="sheets_url" class="sheets-url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
+                       placeholder="https://script.google.com/macros/s/.../exec">
+                <button id="sheets_connect" class="btn-sheets">Connect</button>
+                <button id="sheets_resend" class="btn-sheets secondary">Send all saved workouts again</button>
+                <div id="sheets_status" class="sheets-status"></div>
+            </div>
 
             <h2>Last Workout Summary</h2>
             <div id="summary_content"></div>
@@ -580,7 +664,12 @@
         const REST_SECONDS = 180;
 
         // Standard kettlebell sizes in kg. Edit this list to match the bells at your gym.
-        const KETTLEBELLS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40, 44, 48];
+        const KETTLEBELLS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 26, 28, 30, 32, 36, 40, 44, 48]; // no 22 kg at this gym
+
+        // Dumbbell rack in lbs: 2.5 lb steps below 40 lbs (2.5, 5 ... 37.5), then 5 lb steps (40, 45 ... 150).
+        const DUMBBELLS = [];
+        for (let w = 2.5; w < 40; w += 2.5) DUMBBELLS.push(w);
+        for (let w = 40; w <= 150; w += 5) DUMBBELLS.push(w);
 
         // Exercises default to lbs in 5 lb steps, 1 working set, and 2 warmups (50% + 75%). Options:
         //   sets: 2                   two working sets, each with its own weight and reps
@@ -589,8 +678,8 @@
         //   unit / sizes / defaultWeight   fixed weight list, e.g. kettlebells
         const exercises = {
             push: [
-                { id: 'inc_press', name: 'Incline Machine Press', sets: 2 },
-                { id: 'pec_deck', name: 'Pec Deck', sets: 2, warmups: 1 },
+                { id: 'db_inc_press', name: 'Dumbbell Incline Chest Press', sets: 2, sizes: DUMBBELLS, defaultWeight: 40 }, // per dumbbell
+                { id: 'cable_fly', name: 'Cable Chest Fly', sets: 2, warmups: 1, step: 2.5, defaultWeight: 20 }, // 2nd chest exercise
                 { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2, step: 2.5 },
                 { id: 'tri_push', name: 'Machine Triceps Pushdown', sets: 2 },
                 { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1, step: 2.5 }
@@ -599,7 +688,7 @@
                 { id: 'lat_pull', name: 'Lat Pulldown', sets: 2 },
                 { id: 'high_row', name: 'Machine High Row', sets: 2, warmups: 1 },   // 2nd back exercise
                 { id: 'rev_pec', name: 'Reverse Pec Deck', sets: 2 },
-                { id: 'db_curl', name: 'Dumbbell Bicep Curls', sets: 2 },
+                { id: 'db_curl', name: 'Dumbbell Bicep Curls', sets: 2, sizes: DUMBBELLS },
                 { id: 'abs_crunch', name: 'Machine Abs Crunch', sets: 2 }
             ],
             legs: [
@@ -755,7 +844,8 @@
             // Render HTML
             ['push', 'pull', 'legs'].forEach(day => {
                 document.getElementById(day + '_content').innerHTML = exercises[day]
-                    .map((ex, i, all) => generateCardHtml(ex, day, i + 1, all.length)).join('');
+                    .map((ex, i, all) => generateCardHtml(ex, day, i + 1, all.length)).join('')
+                    + finishCardHtml(day);
             });
 
             // One-time carry-over: keep the reps you logged on the dumbbell split squats.
@@ -868,6 +958,7 @@
             if (summaryEl) {
                 summaryEl.innerHTML = html;
             }
+            ['push', 'pull', 'legs'].forEach(renderFinish); // keep the Finish screens current
         }
 
         function openTab(evt, tabId) {
@@ -1077,6 +1168,246 @@
         });
         // A reload while the timer was open leaves a stale history entry; neutralise it.
         if (history.state && history.state.restTimer) history.replaceState(null, '');
+
+        // ---------- Workout history (on this phone) ----------
+        // Tapping "Save workout" stores one entry per date + day. Saving again the same day
+        // replaces that entry. Each entry remembers whether it has reached Google Sheets yet.
+        const HISTORY_KEY = 'workout_history';
+        const dayNames = { push: 'Push', pull: 'Pull', legs: 'Legs' };
+
+        function loadHistory() {
+            try { return JSON.parse(store.get(HISTORY_KEY, '[]')) || []; } catch (e) { return []; }
+        }
+        function saveHistory(h) { store.set(HISTORY_KEY, JSON.stringify(h)); }
+        function todayISO() {
+            const d = new Date(); // local date, not UTC, so an evening workout lands on the right day
+            return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+        }
+        function workoutId(date, day) { return date + '|' + day; }
+        function isSent(w) { return w.sent === w.savedAt; }
+
+        // What's on the cards right now, one row per set
+        function currentSets(day) {
+            const rows = [];
+            exercises[day].forEach(ex => {
+                const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
+                for (let s = 1; s <= setsOf(ex); s++) {
+                    const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
+                    const reps = parseInt(store.get(key(ex, s, 'reps'), 6)) || 0;
+                    rows.push({ exId: ex.id, exercise: ex.name, set: s, weight, unit: unitOf(ex), reps });
+                }
+            });
+            return rows;
+        }
+
+        function finishCardHtml(day) {
+            return `
+            <div class="exercise-card finish-card">
+                <div class="card-head"><span>${dayHeads[day]}</span><span>Finish</span></div>
+                <div class="exercise-title">Finish workout</div>
+                <div class="finish-date" id="${day}_finish_date"></div>
+                <div class="finish-list" id="${day}_finish_list"></div>
+                <div class="finish-status" id="${day}_finish_status"></div>
+                <button class="btn-finish" id="${day}_finish_btn" onclick="finishWorkout('${day}')">Save workout</button>
+            </div>`;
+        }
+
+        function renderFinish(day) {
+            const list = document.getElementById(day + '_finish_list');
+            if (!list) return;
+            const groups = [];
+            currentSets(day).forEach(r => {
+                let g = groups.find(x => x.exId === r.exId);
+                if (!g) groups.push(g = { exId: r.exId, name: r.exercise, sets: [] });
+                g.sets.push(r);
+            });
+            list.innerHTML = groups.map(g => `
+                <div class="finish-row">
+                    <div class="fx-name">${g.name}</div>
+                    <div class="fx-sets">${g.sets.map(r => `<div>${fmtWeight(r.weight)} ${r.unit} &times; ${r.reps}</div>`).join('')}</div>
+                </div>`).join('');
+            document.getElementById(day + '_finish_date').textContent =
+                new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+
+            const status = document.getElementById(day + '_finish_status');
+            const btn = document.getElementById(day + '_finish_btn');
+            const w = loadHistory().find(x => x.id === workoutId(todayISO(), day));
+            if (!w) {
+                status.textContent = 'Not saved yet today.';
+                status.className = 'finish-status';
+                btn.textContent = 'Save workout';
+                return;
+            }
+            const at = new Date(w.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            let sheetsNote;
+            if (!sheetsUrl()) sheetsNote = 'Google Sheets isn\'t connected (see Info).';
+            else if (isSent(w)) sheetsNote = 'Sent to Google Sheets.';
+            else if (sheets.busy) sheetsNote = 'Sending to Google Sheets...';
+            else if (!navigator.onLine) sheetsNote = 'Will send to Google Sheets when you\'re online.';
+            else sheetsNote = 'Not in Google Sheets yet; it will retry.';
+            status.textContent = `✓ Saved at ${at}. ${sheetsNote} Saving again replaces it.`;
+            status.className = 'finish-status saved';
+            btn.textContent = 'Save again';
+        }
+
+        function finishWorkout(day) {
+            const date = todayISO();
+            const entry = { id: workoutId(date, day), date, day, savedAt: Date.now(), rows: currentSets(day) };
+            const h = loadHistory();
+            const i = h.findIndex(x => x.id === entry.id);
+            if (i >= 0) h[i] = entry; else h.push(entry);
+            saveHistory(h);
+            // Ask Android not to clear this app's storage when space runs low
+            try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* fine */ }
+            renderFinish(day);
+            sheetsFlush();
+        }
+
+        // ---------- Google Sheets export ----------
+        // Sends saved workouts to a small Google Apps Script attached to your sheet (see README).
+        // Every set has a fixed key (date|day|exercise|set), so re-sending never duplicates rows.
+        const SHEETS_URL_KEY = 'sheets_url';
+        const sheets = { busy: false };
+        const sheetsEls = {
+            url: document.getElementById('sheets_url'),
+            connect: document.getElementById('sheets_connect'),
+            resend: document.getElementById('sheets_resend'),
+            status: document.getElementById('sheets_status')
+        };
+        function sheetsUrl() { return store.get(SHEETS_URL_KEY, ''); }
+        function looksLikeScriptUrl(u) {
+            return /^https:\/\/script\.google\.com\/(a\/macros\/[^/]+|macros)\/s\/[\w-]+\/exec\/?(\?.*)?$/.test(u);
+        }
+
+        function sheetRows(w) {
+            return w.rows.map(r => ({
+                key: [w.date, w.day, r.exId, r.set].join('|'),
+                workout: workoutId(w.date, w.day),
+                date: w.date,
+                day: dayNames[w.day] || w.day,
+                exercise: r.exercise,
+                set: r.set,
+                weight: r.weight,
+                unit: r.unit,
+                reps: r.reps,
+                // Estimated 1-rep max (Epley): one number that rises with weight or reps
+                e1rm: r.reps > 0 ? Math.round(r.weight * (1 + r.reps / 30) * 10) / 10 : ''
+            }));
+        }
+
+        async function sheetsPost(payload) {
+            // text/plain keeps this a "simple" request, which Apps Script accepts from a web page
+            const res = await fetch(sheetsUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            let data;
+            try { data = await res.json(); } catch (e) { throw new Error('not-json'); }
+            if (!data || !data.ok) throw new Error((data && data.error) || 'failed');
+            return data;
+        }
+
+        function sheetsSetStatus(text, kind) {
+            sheetsEls.status.textContent = text;
+            sheetsEls.status.className = 'sheets-status' + (kind ? ' ' + kind : '');
+        }
+
+        function sheetsDescribe() {
+            if (!sheetsUrl()) { sheetsSetStatus('Not connected.'); return; }
+            const pending = loadHistory().filter(w => !isSent(w)).length;
+            const name = store.get('sheets_name', 'your sheet');
+            const last = store.get('sheets_last', '');
+            if (pending) {
+                sheetsSetStatus(`Connected to "${name}". ${pending} workout${pending > 1 ? 's' : ''} waiting to send` +
+                    (navigator.onLine ? '.' : ' (you\'re offline).'), '');
+            } else {
+                sheetsSetStatus(`Connected to "${name}" ✓` + (last ? ` Last sent ${last}.` : ''), 'ok');
+            }
+        }
+
+        function sheetsErrorText(err) {
+            if (!navigator.onLine) return 'You\'re offline. It will send when you\'re back online.';
+            if (err && /not-json|Failed to fetch|NetworkError|Load failed|HTTP 4/.test(String(err.message || err)))
+                return 'Couldn\'t reach your Google Sheet. Check the link, and that the script is deployed with access set to "Anyone".';
+            return 'Google Sheets replied with an error: ' + (err && err.message ? err.message : err);
+        }
+
+        // Send every saved workout that isn't in the sheet yet, in one request.
+        async function sheetsFlush() {
+            if (sheets.busy || !sheetsUrl()) return;
+            const pending = loadHistory().filter(w => !isSent(w));
+            if (!pending.length) { sheetsDescribe(); return; }
+            if (!navigator.onLine) { sheetsDescribe(); return; }
+            sheets.busy = true;
+            ['push', 'pull', 'legs'].forEach(renderFinish);
+            try {
+                const rows = [].concat(...pending.map(sheetRows));
+                await sheetsPost({ rows });
+                // Mark exactly what was sent; anything re-saved in the meantime stays pending
+                const h = loadHistory();
+                pending.forEach(p => {
+                    const w = h.find(x => x.id === p.id);
+                    if (w && w.savedAt === p.savedAt) w.sent = p.savedAt;
+                });
+                saveHistory(h);
+                store.set('sheets_last', new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+                sheets.busy = false;
+                sheetsDescribe();
+            } catch (err) {
+                sheets.busy = false;
+                sheetsSetStatus(sheetsErrorText(err), 'err');
+            }
+            ['push', 'pull', 'legs'].forEach(renderFinish);
+        }
+
+        sheetsEls.url.value = sheetsUrl();
+        sheetsEls.connect.addEventListener('click', async () => {
+            const u = sheetsEls.url.value.trim();
+            if (!u) {
+                store.set(SHEETS_URL_KEY, '');
+                try { localStorage.removeItem(SHEETS_URL_KEY); } catch (e) { /* fine */ }
+                sheetsDescribe();
+                ['push', 'pull', 'legs'].forEach(renderFinish);
+                return;
+            }
+            if (!looksLikeScriptUrl(u)) {
+                sheetsSetStatus('That doesn\'t look like the Web app link. It starts with https://script.google.com/macros/s/ and ends with /exec.', 'err');
+                return;
+            }
+            store.set(SHEETS_URL_KEY, u);
+            sheetsEls.connect.disabled = true;
+            sheetsSetStatus('Connecting...');
+            try {
+                const data = await sheetsPost({ test: true });
+                store.set('sheets_name', data.sheet || 'your sheet');
+                sheetsEls.connect.disabled = false;
+                sheetsDescribe();
+                sheetsFlush(); // send anything saved before you connected
+            } catch (err) {
+                sheetsEls.connect.disabled = false;
+                sheetsSetStatus(sheetsErrorText(err), 'err');
+            }
+            ['push', 'pull', 'legs'].forEach(renderFinish);
+        });
+        sheetsEls.resend.addEventListener('click', () => {
+            if (!sheetsUrl()) { sheetsSetStatus('Connect your Google Sheet first.', 'err'); return; }
+            const h = loadHistory();
+            if (!h.length) { sheetsSetStatus('No saved workouts yet. Save one from the last screen of a workout day.'); return; }
+            h.forEach(w => { delete w.sent; });
+            saveHistory(h);
+            sheetsFlush();
+        });
+        // Retry whenever a connection comes back or the app is reopened
+        window.addEventListener('online', sheetsFlush);
+        window.addEventListener('offline', sheetsDescribe);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) return;
+            ['push', 'pull', 'legs'].forEach(renderFinish); // date/status may have changed
+            sheetsFlush();
+        });
+        window.addEventListener('load', () => { sheetsDescribe(); sheetsFlush(); });
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.
