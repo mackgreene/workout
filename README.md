@@ -34,7 +34,7 @@ An "Install app" button also appears at the top of the Info tab once the browser
 Exercises are a short list near the top of the script in `index.html`. Each entry can take:
 - `sets: 2` for two working sets with their own weight and reps (all three days use this)
 - `step: 2.5` for 2.5 lb steps instead of 5 (cable exercises: Cable Chest Fly, Cable Lateral Raises,
-  Cable Overhead Triceps Extensions, Pallof Press)
+  Cable Overhead Triceps Extensions, Cable Reverse Fly, Pallof Press)
 - `warmups: 1` for a single 75% warmup (the 2nd exercise of a muscle group:
   Cable Chest Fly, Overhead Triceps Extensions, Machine High Row, Leg Press)
 - `unit`, `sizes`, `defaultWeight` for a fixed weight list such as kettlebells
@@ -42,7 +42,7 @@ Exercises are a short list near the top of the script in `index.html`. Each entr
   `DUMBBELLS` is the dumbbell rack: 2.5 lb steps below 40 lbs, then 5 lb steps (used by
   Dumbbell Incline Chest Press and Dumbbell Bicep Curls)
 - `defaultWeight` is also the starting weight for a new exercise (Dumbbell Incline Chest Press
-  starts at 40 lbs per dumbbell, Cable Chest Fly at 20 lbs)
+  starts at 40 lbs per dumbbell, Cable Chest Fly at 20 lbs, Cable Reverse Fly at 15 lbs)
 
 ## Full-screen exercises
 On Push, Pull and Legs each exercise fills the screen below the top bar, and one swipe
