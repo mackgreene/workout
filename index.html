@@ -560,6 +560,8 @@
         .rest-round svg { width: 34px; height: 34px; fill: currentColor; }
         .rest-pill:active, .rest-round:active { background-color: #3a3a3a; }
         .rest-pill:disabled { color: #555555; }
+        .app-version { text-align: right; font-size: 15px; color: #999999; letter-spacing: 0.5px; margin: 0 2px -4px 0; }
+
         /* Finish screen: Save + View summary side by side once saved */
         .finish-actions { display: flex; gap: 10px; }
         .finish-actions .btn-finish { flex: 1; }
@@ -678,6 +680,9 @@
                 <p>Add this to your home screen so it opens full-screen and works offline at the gym.</p>
                 <button id="install_btn" class="btn-install">Install app</button>
             </div>
+
+            <!-- App version: bump this together with CACHE in sw.js -->
+            <div id="app_version" class="app-version">Version 8.1</div>
 
             <h2>The Protocol</h2>
             <ul class="rules-list">
@@ -1833,7 +1838,7 @@
             const h = w.hr;
             const W = 400, PAD = 22, SCALE = 2.7;
             const zoneRows = h ? [5, 4, 3, 2, 1].concat(h.inZone[0] > 0 ? [0] : []) : [];
-            const H = h ? 650 + zoneRows.length * 34 + 30 : 330;
+            const H = h ? 691 + zoneRows.length * 34 + 30 : 330; // 691 = layout incl. the grey band
             canvas.width = Math.round(W * SCALE);
             canvas.height = Math.round(H * SCALE);
             const g = canvas.getContext('2d');
@@ -1887,7 +1892,7 @@
 
             // Zone chart: five bands (zone 5 on top), heart rate line over them
             const Z = h.zones, top0 = 236, BAND = 37, GAP = 4;
-            const bandTop = k => top0 + (5 - k) * (BAND + GAP);       // k = 1..5
+            const bandTop = k => top0 + (5 - k) * (BAND + GAP);       // k = 1..5, and 0 = below zone 1
             const upper = k => k < 5 ? Z[k] : Z[4] + (Z[4] - Z[3]);   // top of zone k in bpm
             for (let k = 5; k >= 1; k--) {
                 const y = bandTop(k), c = ZONE_COLORS[k - 1];
@@ -1898,9 +1903,27 @@
                 g.fillStyle = c; g.fillRect(PAD, y, 6, BAND); g.restore();
                 text(String(Z[k - 1]), PAD + 18, y + BAND / 2 + 9, `700 26px ${COND}`, '#ffffff');
             }
-            const chartBottom = bandTop(1) + BAND + GAP / 2, chartTop = bandTop(5) - GAP / 2;
+            // Grey band under zone 1, so recovery dips between sets show how low they went.
+            // Its bottom is the lowest reading of the workout (or one zone-width below zone 1).
+            const GREY = '#6b6b6b';
+            const lowest = Math.min(...h.series.filter(b => b > 0));
+            const floor = Math.min(Math.floor(Math.min(lowest, Z[0] - (Z[1] - Z[0])) / 5) * 5, Z[0] - 5);
+            {
+                const y = bandTop(0);
+                const lg = g.createLinearGradient(PAD, 0, W - PAD, 0);
+                lg.addColorStop(0, hexA(GREY, 0.85)); lg.addColorStop(0.3, hexA(GREY, 0.45)); lg.addColorStop(1, hexA(GREY, 0.10));
+                roundRect(g, PAD, y, W - 2 * PAD, BAND, 9); g.fillStyle = lg; g.fill();
+                g.save(); roundRect(g, PAD, y, W - 2 * PAD, BAND, 9); g.clip();
+                g.fillStyle = GREY; g.fillRect(PAD, y, 6, BAND); g.restore();
+                text(String(floor), PAD + 18, y + BAND / 2 + 9, `700 26px ${COND}`, 'rgba(255,255,255,0.75)');
+            }
+            const chartBottom = bandTop(0) + BAND + GAP / 2, chartTop = bandTop(5) - GAP / 2;
             const yOf = b => {
-                if (b < Z[0]) return chartBottom;
+                if (b < Z[0]) {
+                    const f = Math.max(0, (b - floor) / (Z[0] - floor));
+                    const yb = bandTop(0) + BAND + GAP / 2, yt = bandTop(0) - GAP / 2;
+                    return yb - f * (yb - yt);
+                }
                 for (let k = 1; k <= 5; k++) {
                     const lo = Z[k - 1], hi = upper(k);
                     if (b < hi || k === 5) {
@@ -1930,7 +1953,7 @@
                 g.strokeStyle = '#ffffff'; g.lineWidth = 1.6; g.lineJoin = 'round'; g.stroke();
             });
             // Start / end times under the chart
-            const axisY = bandTop(1) + BAND + 20;
+            const axisY = bandTop(0) + BAND + 20;
             text(t(h.start), x0, axisY, `500 13px ${SANS}`, '#9a9a9a');
             text(t(h.end), x1, axisY, `500 13px ${SANS}`, '#9a9a9a', 'right');
 

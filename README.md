@@ -70,6 +70,8 @@ the signal drops (it keeps reconnecting by itself). There's no live number on sc
   the zone chart, duration and time in each zone. Share it or save it to the phone.
   **Summary** on the Finish screen reopens it.
 - Zones are set on the Info tab (they start as 84 / 102 / 119 / 135 / 152 from your Polar).
+- The chart has a grey band under Zone 1 so recovery dips between sets show; its bottom is the
+  workout's lowest reading. Time there is the "Below" row in Time in zones.
 - The font in the summary is Barlow Condensed (SIL Open Font License, `fonts/OFL.txt`).
 
 ## Saving workouts and Google Sheets
@@ -84,5 +86,7 @@ With the v8 script, workouts with heart rate also get a row in a **Heart Rate** 
 average, max, time in each zone). The older script keeps working; it just skips heart rate.
 
 ## Updating the app later
-Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v8` → `ppl-workout-v9`), and re-upload.
+Edit `index.html`, then bump the version in two places: the `Version 8.1` line at the top of the Info
+tab in `index.html` and `CACHE` in `sw.js` (e.g. `ppl-workout-v8.1` → `ppl-workout-v8.2`).
+Re-upload.
 Phones will pick up the new version the next time they open the app with a connection.
