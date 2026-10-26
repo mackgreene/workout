@@ -603,6 +603,15 @@
         .hr-btn[hidden] { display: none; }
         .hr-btn svg { width: 24px; height: 24px; fill: currentColor; }
         .hr-btn[data-state="recording"] { color: #ff5252; }
+        /* Live number (Info > Heart Rate > Show live heart rate). Heart takes the current zone's color. */
+        .hr-btn.live { width: auto; min-width: 80px; padding: 0 8px; gap: 5px; }
+        .hr-btn.live svg { width: 22px; height: 22px; }
+        .hr-val { display: none; font-size: 20px; font-weight: bold; color: #ffffff; font-variant-numeric: tabular-nums; }
+        .hr-btn.live .hr-val { display: inline; }
+        .hr-btn:not([data-state="recording"]) .hr-val { color: #999999; }
+        .hr-btn[data-state="recording"] svg { color: var(--zone-color, #ff5252); }
+        .hr-toggle { display: flex; align-items: center; gap: 12px; font-size: 20px; padding: 12px 0 2px 0; }
+        .hr-toggle input { width: 24px; height: 24px; accent-color: #4CAF50; flex-shrink: 0; }
         .hr-btn[data-state="connecting"] svg,
         .hr-btn[data-state="lost"] svg { color: #ff5252; animation: hr-wait 1.4s ease-in-out infinite; }
         @keyframes hr-wait { 50% { opacity: 0.2; } }
@@ -670,6 +679,7 @@
         <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
         <button id="hr_btn" class="hr-btn" data-state="idle" aria-label="Heart rate recording">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <span id="hr_val" class="hr-val"></span>
         </button>
     </div>
 
@@ -682,7 +692,7 @@
             </div>
 
             <!-- App version: bump this together with CACHE in sw.js -->
-            <div id="app_version" class="app-version">Version 8.1</div>
+            <div id="app_version" class="app-version">Version 8.2</div>
 
             <h2>The Protocol</h2>
             <ul class="rules-list">
@@ -698,9 +708,10 @@
 
             <h2>Heart Rate</h2>
             <div id="hr_info" class="summary-card hr-card">
-                <p>Tap the heart in the top bar to record from your Polar strap. It records quietly in the background of the workout (the screen stays on), and <strong>Save workout</strong> stops recording and shows your summary.</p>
+                <p>Tap the heart in the top bar to record from your Polar strap. While it records, the top bar shows your heart rate and the heart takes your current zone's color (grey below Zone 1). The screen stays on, and <strong>Save workout</strong> stops recording and shows your summary.</p>
                 <p>Zones start at these heart rates (from your Polar summary). Change them if Polar's change.</p>
                 <div id="zone_inputs"></div>
+                <label class="hr-toggle"><input type="checkbox" id="hr_live_toggle"> Show live heart rate in the top bar</label>
                 <div id="hr_status" class="sheets-status"></div>
             </div>
 
@@ -1621,8 +1632,26 @@
             else if (state === 'lost') hrInfo('Lost the strap signal. Reconnecting...');
             else hrInfo(mins ? `Not recording. ${mins} min recorded today will go with your next save.` : 'Not recording.');
         }
+        // Live number next to the heart, with the heart in the current zone's color
+        const HR_LIVE_KEY = 'hr_live';
+        function hrLiveOn() { return store.get(HR_LIVE_KEY, '1') === '1'; }
+        function hrRenderLive() {
+            const val = document.getElementById('hr_val');
+            const state = hr.btn.dataset.state;
+            const live = hrLiveOn() && state !== 'idle';
+            hr.btn.classList.toggle('live', live);
+            if (!live) { val.textContent = ''; hr.btn.style.removeProperty('--zone-color'); return; }
+            if (state === 'recording' && hr.lastBpm) {
+                val.textContent = hr.lastBpm;
+                const z = zoneOf(hr.lastBpm, hrZones());
+                hr.btn.style.setProperty('--zone-color', z ? ZONE_COLORS[z - 1] : '#9e9e9e');
+            } else {
+                val.textContent = '--'; // connecting, or lost the signal
+            }
+        }
         function hrSetState(state) {
             hr.btn.dataset.state = state; // idle | connecting | recording | lost
+            hrRenderLive();
             hrDescribe();
         }
 
@@ -1660,7 +1689,10 @@
             hr.lastBpm = bpm;
             hrRecord(bpm);
             if (hr.btn.dataset.state !== 'recording') hrSetState('recording');
-            else if (hr.session.bpm.length % 15 === 0) hrDescribe();
+            else {
+                hrRenderLive();
+                if (hr.session.bpm.length % 15 === 0) hrDescribe();
+            }
         }
 
         async function hrKeepAwake(on) {
@@ -2047,6 +2079,12 @@
 
         renderZoneInputs();
         hrDescribe();
+        const hrLiveToggle = document.getElementById('hr_live_toggle');
+        hrLiveToggle.checked = hrLiveOn();
+        hrLiveToggle.addEventListener('change', () => {
+            store.set(HR_LIVE_KEY, hrLiveToggle.checked ? '1' : '0');
+            hrRenderLive();
+        });
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.

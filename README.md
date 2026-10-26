@@ -60,8 +60,9 @@ Every exercise has a **Rest 3:00** button at the bottom. It opens a full-screen 
 
 ## Heart rate recording and workout summary
 Tap the heart at the right of the top bar and pick your Polar strap (any standard Bluetooth
-heart rate strap works). It records quietly: the heart turns red while recording and blinks if
-the signal drops (it keeps reconnecting by itself). There's no live number on screen.
+heart rate strap works). While recording, the top bar shows your heart rate and the heart takes
+your current zone's color (grey below Zone 1). It blinks with "--" if the signal drops, and keeps
+reconnecting by itself. Turn the number off on the Info tab (Show live heart rate in the top bar).
 - The screen stays on while recording, because phones pause Bluetooth for web apps when the
   screen is off.
 - Readings are saved on the phone every few seconds; if Android closes the app, what was
@@ -86,7 +87,7 @@ With the v8 script, workouts with heart rate also get a row in a **Heart Rate** 
 average, max, time in each zone). The older script keeps working; it just skips heart rate.
 
 ## Updating the app later
-Edit `index.html`, then bump the version in two places: the `Version 8.1` line at the top of the Info
-tab in `index.html` and `CACHE` in `sw.js` (e.g. `ppl-workout-v8.1` → `ppl-workout-v8.2`).
+Edit `index.html`, then bump the version in two places: the `Version 8.2` line at the top of the Info
+tab in `index.html` and `CACHE` in `sw.js` (e.g. `ppl-workout-v8.2` → `ppl-workout-v8.3`).
 Re-upload.
 Phones will pick up the new version the next time they open the app with a connection.
