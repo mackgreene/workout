@@ -58,6 +58,20 @@ Every exercise has a **Rest 3:00** button at the bottom. It opens a full-screen 
 - Close with the X or Android's back gesture. The screen stays on while the timer is open.
 - The length is `REST_SECONDS` at the top of the script in `index.html`.
 
+## Heart rate recording and workout summary
+Tap the heart at the right of the top bar and pick your Polar strap (any standard Bluetooth
+heart rate strap works). It records quietly: the heart turns red while recording and blinks if
+the signal drops (it keeps reconnecting by itself). There's no live number on screen.
+- The screen stays on while recording, because phones pause Bluetooth for web apps when the
+  screen is off.
+- Readings are saved on the phone every few seconds; if Android closes the app, what was
+  recorded is kept. Tap the heart again to carry on (Android makes you pick the strap again).
+- **Save workout** stops recording and opens the summary image: average and max heart rate,
+  the zone chart, duration and time in each zone. Share it or save it to the phone.
+  **Summary** on the Finish screen reopens it.
+- Zones are set on the Info tab (they start as 84 / 102 / 119 / 135 / 152 from your Polar).
+- The font in the summary is Barlow Condensed (SIL Open Font License, `fonts/OFL.txt`).
+
 ## Saving workouts and Google Sheets
 After the last exercise of each day, swipe once more to the **Finish workout** screen and tap
 **Save workout**. It stores the day on the phone (one entry per date and day; saving again
@@ -66,7 +80,9 @@ Save before bumping weights for next time.
 
 To connect a sheet, follow `google-sheets-setup/SETUP.md` (it uses the `Code.gs` script there).
 That folder is not part of the app, so it doesn't need to be uploaded with it.
+With the v8 script, workouts with heart rate also get a row in a **Heart Rate** tab (duration,
+average, max, time in each zone). The older script keeps working; it just skips heart rate.
 
 ## Updating the app later
-Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v7` → `ppl-workout-v8`), and re-upload.
+Edit `index.html`, bump the version in `sw.js` (e.g. `ppl-workout-v8` → `ppl-workout-v9`), and re-upload.
 Phones will pick up the new version the next time they open the app with a connection.

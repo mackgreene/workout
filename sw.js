@@ -1,5 +1,5 @@
 // Bump this version whenever you change index.html so phones pick up the update.
-const CACHE = 'ppl-workout-v7.2';
+const CACHE = 'ppl-workout-v8';
 
 const ASSETS = [
   './',
@@ -8,7 +8,9 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-192.png',
-  './icons/maskable-512.png'
+  './icons/maskable-512.png',
+  './fonts/barlow-condensed-latin-600-normal.woff2',
+  './fonts/barlow-condensed-latin-700-normal.woff2'
 ];
 
 // Install: cache everything the app needs to run offline.

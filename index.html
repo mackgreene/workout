@@ -560,6 +560,103 @@
         .rest-round svg { width: 34px; height: 34px; fill: currentColor; }
         .rest-pill:active, .rest-round:active { background-color: #3a3a3a; }
         .rest-pill:disabled { color: #555555; }
+        /* Finish screen: Save + View summary side by side once saved */
+        .finish-actions { display: flex; gap: 10px; }
+        .finish-actions .btn-finish { flex: 1; }
+        .btn-finish.secondary {
+            background-color: transparent;
+            color: #4CAF50;
+            border: 2px solid #4CAF50;
+        }
+        .btn-finish.secondary:active { background-color: #223322; }
+        .finish-actions [hidden] { display: none; }
+
+        /* ---------- Heart rate recorder (top bar icon only; no live number) ---------- */
+        @font-face {
+            font-family: "Barlow Condensed";
+            font-weight: 600;
+            font-display: swap;
+            src: url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2");
+        }
+        @font-face {
+            font-family: "Barlow Condensed";
+            font-weight: 700;
+            font-display: swap;
+            src: url("fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
+        }
+        .hr-btn {
+            flex: 0 0 auto;
+            width: 52px;
+            margin: 0 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #333;
+            color: #777777;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .hr-btn[hidden] { display: none; }
+        .hr-btn svg { width: 24px; height: 24px; fill: currentColor; }
+        .hr-btn[data-state="recording"] { color: #ff5252; }
+        .hr-btn[data-state="connecting"] svg,
+        .hr-btn[data-state="lost"] svg { color: #ff5252; animation: hr-wait 1.4s ease-in-out infinite; }
+        @keyframes hr-wait { 50% { opacity: 0.2; } }
+        @media (prefers-reduced-motion: reduce) { .hr-btn svg { animation: none !important; } }
+
+        .hr-card p { margin: 0 0 12px 0; font-size: 20px; line-height: 1.4; color: #cccccc; }
+        .zone-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 20px;
+        }
+        .zone-chip { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; }
+        .zone-row label { flex: 1; }
+        .zone-row input {
+            width: 90px;
+            box-sizing: border-box;
+            font-size: 20px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background-color: #2a2a2a;
+            color: #ffffff;
+            text-align: right;
+        }
+        .zone-row input:focus { outline: 2px solid #4CAF50; border-color: #4CAF50; }
+        .zone-row .bpm { font-size: 15px; color: #999999; width: 34px; }
+
+        /* ---------- Workout summary (opens after Save) ---------- */
+        .sum {
+            position: fixed;
+            inset: 0;
+            z-index: 2100;
+            background-color: #121212;
+            display: flex;
+            flex-direction: column;
+            padding: calc(8px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px)) 12px;
+            box-sizing: border-box;
+        }
+        .sum[hidden] { display: none; }
+        .sum-top { display: flex; align-items: center; justify-content: space-between; padding-left: 6px; }
+        .sum-kicker { font-size: 15px; color: #999999; text-transform: uppercase; letter-spacing: 1px; }
+        .sum-body {
+            flex: 1;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 4px 0 10px 0;
+        }
+        .sum-body canvas { width: 100%; max-width: 480px; height: auto; border-radius: 18px; display: block; }
+        .sum-actions { display: flex; gap: 10px; }
+        .sum-actions .btn-sheets { flex: 1; min-height: 56px; margin-top: 0; font-size: 20px; }
+        .sum-actions [hidden] { display: none; }
     </style>
 </head>
 <body>
@@ -569,6 +666,9 @@
         <button class="nav-btn" onclick="openTab(event, 'push')">Push</button>
         <button class="nav-btn" onclick="openTab(event, 'pull')">Pull</button>
         <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
+        <button id="hr_btn" class="hr-btn" data-state="idle" aria-label="Heart rate recording">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
     </div>
 
     <div class="container">
@@ -590,6 +690,14 @@
                 <li><strong>Dumbbells:</strong> weight steps through the rack: 2.5 lbs at a time below 40 lbs, then 5 lbs. Warmups round to the nearest dumbbell. Hit 8 reps? Go up one dumbbell.</li>
                 <li><strong>Kettlebells:</strong> weight steps through standard bell sizes in kg, and warmups round to the nearest bell. Hit 8 reps? Go up one bell.</li>
             </ul>
+
+            <h2>Heart Rate</h2>
+            <div id="hr_info" class="summary-card hr-card">
+                <p>Tap the heart in the top bar to record from your Polar strap. It records quietly in the background of the workout (the screen stays on), and <strong>Save workout</strong> stops recording and shows your summary.</p>
+                <p>Zones start at these heart rates (from your Polar summary). Change them if Polar's change.</p>
+                <div id="zone_inputs"></div>
+                <div id="hr_status" class="sheets-status"></div>
+            </div>
 
             <h2>Google Sheets</h2>
             <div class="summary-card sheets-card">
@@ -618,6 +726,21 @@
         <!-- LEGS TAB -->
         <div id="legs" class="tab-content">
             <div id="legs_content"></div>
+        </div>
+    </div>
+
+    <!-- WORKOUT SUMMARY (opens after Save workout) -->
+    <div id="summary" class="sum" role="dialog" aria-modal="true" aria-label="Workout summary" hidden>
+        <div class="sum-top">
+            <span class="sum-kicker">Workout summary</span>
+            <button id="sum_close" class="rest-close" aria-label="Close summary">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="sum-body"><canvas id="sum_canvas" aria-label="Heart rate summary image"></canvas></div>
+        <div class="sum-actions">
+            <button id="sum_share" class="btn-sheets">Share image</button>
+            <button id="sum_save" class="btn-sheets secondary">Save image</button>
         </div>
     </div>
 
@@ -1208,7 +1331,10 @@
                 <div class="finish-date" id="${day}_finish_date"></div>
                 <div class="finish-list" id="${day}_finish_list"></div>
                 <div class="finish-status" id="${day}_finish_status"></div>
-                <button class="btn-finish" id="${day}_finish_btn" onclick="finishWorkout('${day}')">Save workout</button>
+                <div class="finish-actions">
+                    <button class="btn-finish" id="${day}_finish_btn" onclick="finishWorkout('${day}')">Save workout</button>
+                    <button class="btn-finish secondary" id="${day}_view_btn" onclick="summaryOpen(workoutId(todayISO(), '${day}'))" hidden>Summary</button>
+                </div>
             </div>`;
         }
 
@@ -1232,12 +1358,15 @@
             const status = document.getElementById(day + '_finish_status');
             const btn = document.getElementById(day + '_finish_btn');
             const w = loadHistory().find(x => x.id === workoutId(todayISO(), day));
+            const viewBtn = document.getElementById(day + '_view_btn');
             if (!w) {
                 status.textContent = 'Not saved yet today.';
                 status.className = 'finish-status';
                 btn.textContent = 'Save workout';
+                viewBtn.hidden = true;
                 return;
             }
+            viewBtn.hidden = false;
             const at = new Date(w.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             let sheetsNote;
             if (!sheetsUrl()) sheetsNote = 'Google Sheets isn\'t connected (see Info).';
@@ -1255,12 +1384,18 @@
             const entry = { id: workoutId(date, day), date, day, savedAt: Date.now(), rows: currentSets(day) };
             const h = loadHistory();
             const i = h.findIndex(x => x.id === entry.id);
+            // Heart rate recorded today goes with the workout. Saving again keeps the earlier
+            // recording unless there's a newer one.
+            const recorded = hrSummaryForToday();
+            entry.hr = recorded || (i >= 0 && h[i].hr) || null;
             if (i >= 0) h[i] = entry; else h.push(entry);
             saveHistory(h);
             // Ask Android not to clear this app's storage when space runs low
             try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* fine */ }
+            if (hr.wanted) hrStop(); // workout's done: stop recording and let the screen sleep again
             renderFinish(day);
             sheetsFlush();
+            summaryOpen(entry.id);
         }
 
         // ---------- Google Sheets export ----------
@@ -1344,7 +1479,8 @@
             ['push', 'pull', 'legs'].forEach(renderFinish);
             try {
                 const rows = [].concat(...pending.map(sheetRows));
-                await sheetsPost({ rows });
+                const hrRows = pending.map(sheetHr).filter(Boolean);
+                await sheetsPost({ rows, hr: hrRows });
                 // Mark exactly what was sent; anything re-saved in the meantime stays pending
                 const h = loadHistory();
                 pending.forEach(p => {
@@ -1408,6 +1544,486 @@
             sheetsFlush();
         });
         window.addEventListener('load', () => { sheetsDescribe(); sheetsFlush(); });
+
+        // ---------- Heart rate zones ----------
+        // Lower limit of each zone in bpm. Defaults copied from your Polar summary.
+        const HR_ZONES_KEY = 'hr_zones';
+        const DEFAULT_ZONES = [84, 102, 119, 135, 152];
+        const ZONE_COLORS = ['#1b80c4', '#27b868', '#e8c31b', '#ef8a13', '#d8332f']; // zone 1 ... zone 5
+        function hrZones() {
+            try {
+                const z = JSON.parse(store.get(HR_ZONES_KEY, 'null'));
+                if (Array.isArray(z) && z.length === 5 && z.every((v, i) => v > 0 && (i === 0 || v > z[i - 1]))) return z;
+            } catch (e) { /* use defaults */ }
+            return DEFAULT_ZONES.slice();
+        }
+        // 0 = below zone 1, 1..5 = zone number
+        function zoneOf(bpm, zones) {
+            let z = 0;
+            for (let i = 0; i < 5; i++) if (bpm >= zones[i]) z = i + 1;
+            return z;
+        }
+        function renderZoneInputs() {
+            const z = hrZones();
+            document.getElementById('zone_inputs').innerHTML = [4, 3, 2, 1, 0].map(i => `
+                <div class="zone-row">
+                    <span class="zone-chip" style="background:${ZONE_COLORS[i]}"></span>
+                    <label for="zone_${i}">Zone ${i + 1} from</label>
+                    <input id="zone_${i}" type="number" inputmode="numeric" min="40" max="230" value="${z[i]}">
+                    <span class="bpm">bpm</span>
+                </div>`).join('');
+            for (let i = 0; i < 5; i++) {
+                document.getElementById('zone_' + i).addEventListener('change', () => {
+                    const vals = [0, 1, 2, 3, 4].map(k => parseInt(document.getElementById('zone_' + k).value));
+                    const ok = vals.every((v, k) => v >= 40 && v <= 230 && (k === 0 || v > vals[k - 1]));
+                    if (ok) { store.set(HR_ZONES_KEY, JSON.stringify(vals)); hrInfo('Zones saved.'); }
+                    else hrInfo('Each zone has to start higher than the one below it. Not saved.', 'err');
+                });
+            }
+        }
+
+        // ---------- Heart rate recorder (Bluetooth chest strap) ----------
+        // Records one reading per second into today's session. The top-bar heart only shows
+        // whether it's recording. Saved to the phone every few seconds so a reload loses nothing.
+        // Phones pause Bluetooth for web apps when the screen is off, so the screen stays on
+        // while recording, and it reconnects on its own if the link drops.
+        const HR_SESSION_KEY = 'hr_session';
+        const hr = {
+            btn: document.getElementById('hr_btn'),
+            device: null,
+            busy: false,        // a connection attempt is in progress
+            wanted: false,      // you started recording and haven't stopped
+            retries: 0,
+            retryTimer: null,
+            staleTimer: null,
+            wakeLock: null,
+            session: null,      // { date, start (ms), bpm: [one value per second, 0 = no reading] }
+            lastSaved: 0,
+            lastBpm: 0
+        };
+
+        function hrInfo(text, kind) {
+            const el = document.getElementById('hr_status');
+            el.textContent = text;
+            el.className = 'sheets-status' + (kind ? ' ' + kind : '');
+        }
+        function hrDescribe() {
+            const s = hr.session || hrLoadSession();
+            const mins = s && s.date === todayISO() ? Math.round(s.bpm.length / 60) : 0;
+            const state = hr.btn.dataset.state;
+            if (state === 'recording') hrInfo(`Recording: ${mins} min so far, last reading ${hr.lastBpm} bpm.`, 'ok');
+            else if (state === 'connecting') hrInfo('Connecting to the strap...');
+            else if (state === 'lost') hrInfo('Lost the strap signal. Reconnecting...');
+            else hrInfo(mins ? `Not recording. ${mins} min recorded today will go with your next save.` : 'Not recording.');
+        }
+        function hrSetState(state) {
+            hr.btn.dataset.state = state; // idle | connecting | recording | lost
+            hrDescribe();
+        }
+
+        function hrLoadSession() {
+            try { return JSON.parse(store.get(HR_SESSION_KEY, 'null')); } catch (e) { return null; }
+        }
+        function hrPersist(force) {
+            if (!hr.session) return;
+            if (force || Date.now() - hr.lastSaved > 5000) {
+                store.set(HR_SESSION_KEY, JSON.stringify(hr.session));
+                hr.lastSaved = Date.now();
+            }
+        }
+        function hrRecord(bpm) {
+            const now = Date.now();
+            let s = hr.session || hrLoadSession();
+            const lastAt = s ? s.start + (s.bpm.length - 1) * 1000 : 0;
+            // A new day, or a reading 30+ minutes after the last one, starts a fresh session
+            if (!s || s.date !== todayISO() || now - lastAt > 30 * 60 * 1000) s = { date: todayISO(), start: now, bpm: [] };
+            const i = Math.round((now - s.start) / 1000);
+            while (s.bpm.length < i) s.bpm.push(0);
+            s.bpm[i] = bpm;
+            hr.session = s;
+            hrPersist(false);
+        }
+
+        // Standard heart rate measurement: byte 0 = flags; bit 0 says whether BPM is 1 or 2 bytes.
+        function hrOnValue(e) {
+            const v = e.target.value;
+            const bpm = (v.getUint8(0) & 1) ? v.getUint16(1, true) : v.getUint8(1);
+            clearTimeout(hr.staleTimer);
+            hr.staleTimer = setTimeout(() => { if (hr.wanted) hrSetState('lost'); }, 8000);
+            if (!bpm) { hrSetState('lost'); return; } // 0 = strap has no skin contact
+            hr.retries = 0;
+            hr.lastBpm = bpm;
+            hrRecord(bpm);
+            if (hr.btn.dataset.state !== 'recording') hrSetState('recording');
+            else if (hr.session.bpm.length % 15 === 0) hrDescribe();
+        }
+
+        async function hrKeepAwake(on) {
+            try {
+                if (on && !hr.wakeLock && 'wakeLock' in navigator && !document.hidden) {
+                    hr.wakeLock = await navigator.wakeLock.request('screen');
+                    hr.wakeLock.addEventListener('release', () => { hr.wakeLock = null; });
+                } else if (!on && hr.wakeLock) {
+                    const lock = hr.wakeLock;
+                    hr.wakeLock = null;
+                    await lock.release();
+                }
+            } catch (e) { /* screen follows its normal timeout */ }
+        }
+
+        async function hrConnect() {
+            clearTimeout(hr.retryTimer);
+            if (!hr.device || hr.busy || !hr.wanted) return;
+            hr.busy = true;
+            if (hr.btn.dataset.state !== 'recording') hrSetState('connecting');
+            const device = hr.device;
+            try {
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('heart_rate');
+                const ch = await service.getCharacteristic('heart_rate_measurement');
+                ch.addEventListener('characteristicvaluechanged', hrOnValue);
+                await ch.startNotifications();
+                hr.busy = false;
+                if (hr.device !== device || !hr.wanted) { try { device.gatt.disconnect(); } catch (e) { /* gone */ } return; }
+                clearTimeout(hr.staleTimer);
+                hr.staleTimer = setTimeout(() => { if (hr.wanted) hrSetState('lost'); }, 8000);
+            } catch (err) {
+                hr.busy = false;
+                hrRetry();
+            }
+        }
+
+        // Keep trying for as long as you're recording: 1s, 2s, 4s, 8s, then every 10s.
+        function hrRetry() {
+            if (!hr.wanted || !hr.device) return;
+            hrSetState('lost');
+            if (document.hidden) return; // picks up again when the app is back on screen
+            const delay = Math.min(1000 * Math.pow(2, hr.retries), 10000);
+            hr.retries++;
+            clearTimeout(hr.retryTimer);
+            hr.retryTimer = setTimeout(hrConnect, delay);
+        }
+        function hrOnDisconnect() {
+            clearTimeout(hr.staleTimer);
+            hrPersist(true);
+            hrRetry();
+        }
+
+        async function hrStart() {
+            let device;
+            try {
+                device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
+            } catch (err) {
+                return; // picker closed without choosing
+            }
+            hr.device = device;
+            device.addEventListener('gattserverdisconnected', hrOnDisconnect); // same strap twice is fine
+            hrResume();
+        }
+        // Start (again) with the strap already picked, without showing the picker
+        function hrResume() {
+            hr.wanted = true;
+            hr.retries = 0;
+            hrKeepAwake(true);
+            hrConnect();
+        }
+
+        function hrStop() {
+            hr.wanted = false;
+            clearTimeout(hr.retryTimer);
+            clearTimeout(hr.staleTimer);
+            hrPersist(true);
+            const d = hr.device; // kept, so the next tap reconnects without the picker
+            if (d) {
+                try { if (d.gatt.connected) d.gatt.disconnect(); } catch (e) { /* already gone */ }
+            }
+            hrKeepAwake(false);
+            hrSetState('idle');
+        }
+
+        hr.btn.addEventListener('click', () => {
+            const state = hr.btn.dataset.state;
+            if (state === 'recording') {
+                if (confirm('Stop recording heart rate? (Saving the workout stops it too.)')) hrStop();
+            } else if (state === 'lost' || state === 'connecting') {
+                if (confirm('Trying to reach your strap. Stop recording?\n\nOK = stop, Cancel = keep trying')) hrStop();
+                else { hr.retries = 0; hrConnect(); } // try again right now
+            } else if (hr.device) {
+                hrResume();
+            } else {
+                hrStart();
+            }
+        });
+
+        if (!('bluetooth' in navigator)) {
+            hr.btn.hidden = true;
+            document.getElementById('hr_info').insertAdjacentHTML('afterbegin',
+                '<p><strong>This browser can\'t connect to Bluetooth.</strong> Open the app in Chrome or Samsung Internet to record heart rate.</p>');
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) { hrPersist(true); return; }
+            if (!hr.wanted || !hr.device) return;
+            hrKeepAwake(true); // the screen-on lock is dropped whenever the app is hidden
+            if (!hr.device.gatt.connected) { hr.retries = 0; hrConnect(); }
+        });
+        window.addEventListener('pagehide', () => hrPersist(true));
+
+        // Turn today's recording into what's kept with the workout:
+        // duration, average, max, seconds in each zone, and a 5-second series for the chart.
+        function hrSummaryForToday() {
+            if (hr.session) hrPersist(true);
+            const s = hr.session || hrLoadSession();
+            if (!s || s.date !== todayISO()) return null;
+            return hrSummarize(s, hrZones());
+        }
+        function hrSummarize(s, zones) {
+            const v = s.bpm;
+            const first = v.findIndex(x => x > 0);
+            let last = v.length - 1;
+            while (last >= 0 && !v[last]) last--;
+            if (first < 0 || last - first < 30) return null; // under 30 seconds isn't worth a chart
+            let sum = 0, n = 0, max = 0, prev = 0, since = 99;
+            const inZone = [0, 0, 0, 0, 0, 0]; // [below zone 1, zone 1 ... zone 5] in seconds
+            for (let i = first; i <= last; i++) {
+                let b = v[i];
+                if (b) { prev = b; since = 0; } else if (++since <= 5) b = prev; // bridge short gaps
+                if (!b) continue;
+                sum += b; n++;
+                if (b > max) max = b;
+                inZone[zoneOf(b, zones)]++;
+            }
+            const series = [];
+            for (let i = first; i <= last; i += 5) {
+                let t = 0, c = 0;
+                for (let j = i; j < Math.min(i + 5, last + 1); j++) if (v[j]) { t += v[j]; c++; }
+                series.push(c ? Math.round(t / c) : 0);
+            }
+            return {
+                start: s.start + first * 1000, end: s.start + last * 1000, duration: last - first,
+                avg: Math.round(sum / n), max, zones: zones.slice(), inZone, step: 5, series
+            };
+        }
+
+        // ---------- Workout summary image ----------
+        const COND = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif';
+        const SANS = '-apple-system, Roboto, "Segoe UI", Helvetica, Arial, sans-serif';
+        function fmtDuration(sec) {
+            sec = Math.max(0, Math.round(sec));
+            const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s2 = sec % 60;
+            return h ? { text: `${h}:${pad2(m)}:${pad2(s2)}`, unit: 'h:mm:ss' } : { text: `${pad2(m)}:${pad2(s2)}`, unit: 'mm:ss' };
+        }
+        function roundRect(g, x, y, w, h, r) {
+            g.beginPath();
+            g.moveTo(x + r, y);
+            g.arcTo(x + w, y, x + w, y + h, r);
+            g.arcTo(x + w, y + h, x, y + h, r);
+            g.arcTo(x, y + h, x, y, r);
+            g.arcTo(x, y, x + w, y, r);
+            g.closePath();
+        }
+        function hexA(hex, a) {
+            const n = parseInt(hex.slice(1), 16);
+            return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+        }
+
+        async function drawSummary(canvas, w) {
+            try {
+                await Promise.all([document.fonts.load(`700 40px ${COND}`), document.fonts.load(`600 20px ${COND}`)]);
+            } catch (e) { /* falls back to the system font */ }
+            const h = w.hr;
+            const W = 400, PAD = 22, SCALE = 2.7;
+            const zoneRows = h ? [5, 4, 3, 2, 1].concat(h.inZone[0] > 0 ? [0] : []) : [];
+            const H = h ? 650 + zoneRows.length * 34 + 30 : 330;
+            canvas.width = Math.round(W * SCALE);
+            canvas.height = Math.round(H * SCALE);
+            const g = canvas.getContext('2d');
+            g.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+            // Background: dark with a warm glow top-left and a red glow bottom-right
+            g.fillStyle = '#272727';
+            g.fillRect(0, 0, W, H);
+            let rg = g.createRadialGradient(70, 110, 0, 70, 110, 300);
+            rg.addColorStop(0, 'rgba(150,125,45,0.30)'); rg.addColorStop(1, 'rgba(150,125,45,0)');
+            g.fillStyle = rg; g.fillRect(0, 0, W, H);
+            rg = g.createRadialGradient(W - 30, H - 90, 0, W - 30, H - 90, 340);
+            rg.addColorStop(0, 'rgba(125,30,30,0.34)'); rg.addColorStop(1, 'rgba(125,30,30,0)');
+            g.fillStyle = rg; g.fillRect(0, 0, W, H);
+
+            const text = (str, x, y, font, color, align) => {
+                g.font = font; g.fillStyle = color; g.textAlign = align || 'left'; g.textBaseline = 'alphabetic';
+                g.fillText(str, x, y);
+                return g.measureText(str).width;
+            };
+
+            // Title and date
+            text(`${dayNames[w.day] || w.day} workout`, PAD, 62, `700 46px ${COND}`, '#ffffff');
+            const day = new Date(w.date + 'T12:00:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+            const t = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            text(h ? `${day} · ${t(h.start)} – ${t(h.end)}` : day, PAD, 90, `500 17px ${SANS}`, '#bdbdbd');
+
+            // Heart rate: average and max
+            text('Heart rate', PAD, 140, `700 36px ${COND}`, '#ffffff');
+            if (!h) {
+                g.font = `400 18px ${SANS}`; g.fillStyle = '#bdbdbd'; g.textAlign = 'left';
+                // Word-wrap to the card width
+                const words = 'No heart rate was recorded for this workout. Tap the heart in the top bar before your next workout to record it.'.split(' ');
+                let line = '', ly = 186;
+                words.forEach(word => {
+                    const test = line ? line + ' ' + word : word;
+                    if (g.measureText(test).width > W - 2 * PAD && line) { g.fillText(line, PAD, ly); ly += 26; line = word; }
+                    else line = test;
+                });
+                if (line) g.fillText(line, PAD, ly);
+                text('PPL Workout', W - PAD, H - 16, `600 14px ${COND}`, '#777777', 'right');
+                return;
+            }
+            const stat = (x, value, label) => {
+                const wv = text(String(value), x, 190, `700 48px ${COND}`, '#ffffff');
+                text('bpm', x + wv + 8, 190, `600 19px ${SANS}`, '#ffffff');
+                text(label, x, 216, `500 16px ${SANS}`, '#a8a8a8');
+            };
+            stat(PAD, h.avg, 'Average');
+            stat(210, h.max, 'Max');
+
+            // Zone chart: five bands (zone 5 on top), heart rate line over them
+            const Z = h.zones, top0 = 236, BAND = 37, GAP = 4;
+            const bandTop = k => top0 + (5 - k) * (BAND + GAP);       // k = 1..5
+            const upper = k => k < 5 ? Z[k] : Z[4] + (Z[4] - Z[3]);   // top of zone k in bpm
+            for (let k = 5; k >= 1; k--) {
+                const y = bandTop(k), c = ZONE_COLORS[k - 1];
+                const lg = g.createLinearGradient(PAD, 0, W - PAD, 0);
+                lg.addColorStop(0, hexA(c, 0.95)); lg.addColorStop(0.3, hexA(c, 0.55)); lg.addColorStop(1, hexA(c, 0.10));
+                roundRect(g, PAD, y, W - 2 * PAD, BAND, 9); g.fillStyle = lg; g.fill();
+                g.save(); roundRect(g, PAD, y, W - 2 * PAD, BAND, 9); g.clip();
+                g.fillStyle = c; g.fillRect(PAD, y, 6, BAND); g.restore();
+                text(String(Z[k - 1]), PAD + 18, y + BAND / 2 + 9, `700 26px ${COND}`, '#ffffff');
+            }
+            const chartBottom = bandTop(1) + BAND + GAP / 2, chartTop = bandTop(5) - GAP / 2;
+            const yOf = b => {
+                if (b < Z[0]) return chartBottom;
+                for (let k = 1; k <= 5; k++) {
+                    const lo = Z[k - 1], hi = upper(k);
+                    if (b < hi || k === 5) {
+                        const f = Math.min(1, (b - lo) / (hi - lo));
+                        const yb = bandTop(k) + BAND + GAP / 2, yt = bandTop(k) - GAP / 2;
+                        return yb - f * (yb - yt);
+                    }
+                }
+                return chartTop;
+            };
+            const x0 = PAD + 62, x1 = W - PAD - 2, n = h.series.length;
+            const xOf = i => x0 + (n > 1 ? i / (n - 1) : 0) * (x1 - x0);
+            // Split into runs where there was a reading (no line across gaps)
+            const runs = [];
+            let run = [];
+            h.series.forEach((b, i) => { if (b) run.push([xOf(i), yOf(b)]); else if (run.length) { runs.push(run); run = []; } });
+            if (run.length) runs.push(run);
+            const fill = g.createLinearGradient(0, chartTop, 0, chartBottom);
+            fill.addColorStop(0, 'rgba(255,255,255,0.50)'); fill.addColorStop(1, 'rgba(255,255,255,0.14)');
+            runs.forEach(r => {
+                if (r.length < 2) return;
+                g.beginPath(); g.moveTo(r[0][0], chartBottom);
+                r.forEach(p => g.lineTo(p[0], p[1]));
+                g.lineTo(r[r.length - 1][0], chartBottom); g.closePath();
+                g.fillStyle = fill; g.fill();
+                g.beginPath(); r.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
+                g.strokeStyle = '#ffffff'; g.lineWidth = 1.6; g.lineJoin = 'round'; g.stroke();
+            });
+            // Start / end times under the chart
+            const axisY = bandTop(1) + BAND + 20;
+            text(t(h.start), x0, axisY, `500 13px ${SANS}`, '#9a9a9a');
+            text(t(h.end), x1, axisY, `500 13px ${SANS}`, '#9a9a9a', 'right');
+
+            // Duration
+            const d = fmtDuration(h.duration);
+            const dw = text(d.text, PAD - 2, axisY + 92, `700 96px ${COND}`, '#ffdd1f');
+            text(d.unit, PAD + dw + 6, axisY + 92, `600 22px ${COND}`, '#a8a8a8');
+
+            // Time in zones
+            let y = axisY + 148;
+            text('Time in zones', PAD, y, `700 30px ${COND}`, '#ffffff');
+            y += 14;
+            const total = h.inZone.reduce((a, b) => a + b, 0) || 1;
+            const barX = 176, barW = W - PAD - 62 - barX;
+            zoneRows.forEach(k => {
+                const sec = h.inZone[k], cy = y + 17;
+                const color = k ? ZONE_COLORS[k - 1] : '#6b6b6b';
+                roundRect(g, PAD, cy - 7, 14, 14, 4); g.fillStyle = color; g.fill();
+                text(k ? `Zone ${k}` : 'Below', PAD + 24, cy + 7, `600 21px ${COND}`, '#ffffff');
+                const range = k === 5 ? `${Z[4]}+` : k ? `${Z[k - 1]}–${Z[k] - 1}` : `<${Z[0]}`;
+                text(range, PAD + 86, cy + 6, `500 14px ${SANS}`, '#a8a8a8');
+                roundRect(g, barX, cy - 5, barW, 10, 5); g.fillStyle = 'rgba(255,255,255,0.10)'; g.fill();
+                if (sec > 0) { roundRect(g, barX, cy - 5, Math.max(10, barW * sec / total), 10, 5); g.fillStyle = color; g.fill(); }
+                text(fmtDuration(sec).text, W - PAD, cy + 7, `600 21px ${COND}`, '#ffffff', 'right');
+                y += 34;
+            });
+            text('PPL Workout', W - PAD, H - 14, `600 14px ${COND}`, '#777777', 'right');
+        }
+
+        const sum = {
+            el: document.getElementById('summary'),
+            canvas: document.getElementById('sum_canvas'),
+            share: document.getElementById('sum_share'),
+            open: false,
+            workout: null
+        };
+        async function summaryOpen(id) {
+            const w = loadHistory().find(x => x.id === id);
+            if (!w) return;
+            sum.workout = w;
+            await drawSummary(sum.canvas, w);
+            sum.el.hidden = false;
+            if (!sum.open) history.pushState({ summary: true }, ''); // back gesture closes it
+            sum.open = true;
+        }
+        function summaryClose(fromBack) {
+            if (!sum.open) return;
+            sum.open = false;
+            sum.el.hidden = true;
+            if (!fromBack && history.state && history.state.summary) history.back();
+        }
+        function summaryFile() {
+            return new Promise(resolve => sum.canvas.toBlob(blob => {
+                const w = sum.workout;
+                resolve(new File([blob], `${w.date}-${w.day}-workout.png`, { type: 'image/png' }));
+            }, 'image/png'));
+        }
+        // Share sheet (Messages, Drive, Quick Share...) when the phone supports sharing images
+        sum.share.hidden = !(navigator.canShare && navigator.share);
+        sum.share.addEventListener('click', async () => {
+            const file = await summaryFile();
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: file.name }); } catch (e) { /* cancelled */ }
+            }
+        });
+        // Save to the phone's Downloads (shows up in Gallery under Download)
+        document.getElementById('sum_save').addEventListener('click', async () => {
+            const file = await summaryFile();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(file);
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        });
+        document.getElementById('sum_close').addEventListener('click', () => summaryClose(false));
+        window.addEventListener('popstate', () => summaryClose(true));
+
+        // Heart rate summary row for the "Heart Rate" tab in Google Sheets
+        function sheetHr(w) {
+            if (!w.hr) return null;
+            const h = w.hr;
+            return {
+                key: workoutId(w.date, w.day), date: w.date, day: dayNames[w.day] || w.day,
+                start: new Date(h.start).toTimeString().slice(0, 5),
+                duration: h.duration, avg: h.avg, max: h.max,
+                below: h.inZone[0], z1: h.inZone[1], z2: h.inZone[2], z3: h.inZone[3], z4: h.inZone[4], z5: h.inZone[5]
+            };
+        }
+
+        renderZoneInputs();
+        hrDescribe();
 
         // ---------- PWA: install button ----------
         // Chrome and Samsung Internet fire this once the site qualifies for install.
