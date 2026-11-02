@@ -401,6 +401,12 @@
             touch-action: manipulation;
         }
         .rest-start:active { background-color: #223322; }
+        /* While a rest is running (minimized), every Rest button shows the countdown */
+        .rest-start { min-width: 132px; font-variant-numeric: tabular-nums; }
+        .rest-start.ticking { background-color: #4CAF50; color: #000000; }
+        .rest-start.ticking:active { background-color: #388E3C; }
+        .rest-start.done { background-color: #ffdd1f; border-color: #ffdd1f; color: #000000; }
+        .rest-top-actions { display: flex; gap: 2px; flex-shrink: 0; }
         .rest-start svg { width: 24px; height: 24px; fill: currentColor; }
 
         .rest {
@@ -560,6 +566,33 @@
         .rest-round svg { width: 34px; height: 34px; fill: currentColor; }
         .rest-pill:active, .rest-round:active { background-color: #3a3a3a; }
         .rest-pill:disabled { color: #555555; }
+        /* Machine picker in the card's top line (cable and triceps exercises) */
+        .machine-select {
+            appearance: none;
+            -webkit-appearance: none;
+            max-width: 78%;
+            font: inherit;
+            font-size: 15px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            color: #4CAF50;
+            background: #2a2a2a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234CAF50' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") no-repeat right 6px center / 20px;
+            border: 1px solid #4CAF50;
+            border-radius: 14px;
+            padding: 2px 28px 2px 10px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+            text-transform: none;
+            cursor: pointer;
+        }
+        .card-head { align-items: center; }
+        .fx-machine { display: block; font-size: 14px; color: #999999; }
+        /* Weight readout with an optional setup hint underneath ("47.5 + slider") */
+        .val-display { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+        .w-hint { font-size: 12px; font-weight: normal; color: #4CAF50; white-space: nowrap; line-height: 1.2; }
+        .w-hint:empty { display: none; }
+
         .app-version { text-align: right; font-size: 15px; color: #999999; letter-spacing: 0.5px; margin: 0 2px -4px 0; }
 
         /* Finish screen: Save + View summary side by side once saved */
@@ -609,7 +642,8 @@
         .hr-val { display: none; font-size: 20px; font-weight: bold; color: #ffffff; font-variant-numeric: tabular-nums; }
         .hr-btn.live .hr-val { display: inline; }
         .hr-btn:not([data-state="recording"]) .hr-val { color: #999999; }
-        .hr-btn[data-state="recording"] svg { color: var(--zone-color, #ff5252); }
+        .hr-btn[data-state="recording"] svg { color: var(--zone-color, #ff5252); animation: hr-beat var(--beat, 1s) ease-out infinite; }
+        @keyframes hr-beat { 0% { transform: scale(1); } 12% { transform: scale(1.28); } 30% { transform: scale(1); } }
         .hr-toggle { display: flex; align-items: center; gap: 12px; font-size: 20px; padding: 12px 0 2px 0; }
         .hr-toggle input { width: 24px; height: 24px; accent-color: #4CAF50; flex-shrink: 0; }
         .hr-btn[data-state="connecting"] svg,
@@ -692,7 +726,7 @@
             </div>
 
             <!-- App version: bump this together with CACHE in sw.js -->
-            <div id="app_version" class="app-version">Version 8.2</div>
+            <div id="app_version" class="app-version">Version 9.0</div>
 
             <h2>The Protocol</h2>
             <ul class="rules-list">
@@ -768,9 +802,14 @@
                     <span class="rest-kicker">Rest</span>
                     <span id="rest_name" class="rest-name"></span>
                 </div>
-                <button id="rest_close" class="rest-close" aria-label="Close timer">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
+                <div class="rest-top-actions">
+                    <button id="rest_min" class="rest-close" aria-label="Minimize timer (keeps running)">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+                    </button>
+                    <button id="rest_close" class="rest-close" aria-label="Stop and close timer">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
             </div>
             <div class="rest-dial">
                 <div class="rest-ring-wrap">
@@ -801,6 +840,7 @@
     <script>
         // Rest timer length in seconds.
         const REST_SECONDS = 180;
+        const REST_LABEL = 'Rest ' + Math.floor(REST_SECONDS / 60) + ':' + String(REST_SECONDS % 60).padStart(2, '0');
 
         // Standard kettlebell sizes in kg. Edit this list to match the bells at your gym.
         const KETTLEBELLS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 26, 28, 30, 32, 36, 40, 44, 48]; // no 22 kg at this gym
@@ -810,23 +850,46 @@
         for (let w = 2.5; w < 40; w += 2.5) DUMBBELLS.push(w);
         for (let w = 40; w <= 150; w += 5) DUMBBELLS.push(w);
 
+        // Machines at your gym. A machine with a weight list steps through exactly those weights
+        // (as printed on its stack); one with a step goes up and down by that amount.
+        const MACHINES = {
+            freemotion: {
+                name: 'Freemotion Dual Cable Cross', short: 'Freemotion',
+                weights: [3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40, 43, 47, 50, 53, 57, 60, 63, 67, 70, 73, 77, 80]
+            },
+            dual_pulley: {
+                // 5 lb plates from 2.5 to 97.5, plus a 2.5 lb slider: every 2.5 lbs from 2.5 to 100
+                name: 'Dual Adjustable Pulley', short: 'Dual Pulley',
+                weights: Array.from({ length: 40 }, (_, i) => (i + 1) * 2.5),
+                hint: w => (w % 5 === 0 ? `${fmtWeight(w - 2.5)} + slider` : '')
+            },
+            crossover: {
+                name: 'Adjustable Cable Crossover', short: 'Crossover',
+                weights: [5, 10, 15, 20, 25, 30, 35, 42.5, 50, 57.5, 65, 72.5, 80, 87.5, 95]
+            },
+            tri_press: { name: 'Triceps Press', short: 'Triceps Press', step: 5 },
+            tri_ext: { name: 'Triceps Extension', short: 'Triceps Extension', step: 5 }
+        };
+        const CABLES = ['freemotion', 'dual_pulley', 'crossover'];
+
         // Exercises default to lbs in 5 lb steps, 1 working set, and 2 warmups (50% + 75%). Options:
         //   sets: 2                   two working sets, each with its own weight and reps
         //   warmups: 1                single 75% warmup (for the 2nd exercise of a muscle group)
-        //   step: 2.5                 weight goes up/down by 2.5 lbs (cable exercises)
+        //   step: 2.5                 weight goes up/down by 2.5 lbs
+        //   machines: [...]           pick the machine on the card; weights follow that machine's stack
         //   unit / sizes / defaultWeight   fixed weight list, e.g. kettlebells
         const exercises = {
             push: [
                 { id: 'db_inc_press', name: 'Dumbbell Incline Chest Press', sets: 2, sizes: DUMBBELLS, defaultWeight: 40 }, // per dumbbell
-                { id: 'cable_fly', name: 'Cable Chest Fly', sets: 2, warmups: 1, step: 2.5, defaultWeight: 20 }, // 2nd chest exercise
-                { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2, step: 2.5 },
-                { id: 'tri_push', name: 'Machine Triceps Pushdown', sets: 2 },
-                { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1, step: 2.5 }
+                { id: 'cable_fly', name: 'Cable Chest Fly', sets: 2, warmups: 1, machines: CABLES, defaultWeight: 20 }, // 2nd chest exercise
+                { id: 'cab_lat', name: 'Cable Lateral Raises', sets: 2, machines: CABLES },
+                { id: 'tri_push', name: 'Machine Triceps Pushdown', sets: 2, machines: ['tri_press', 'tri_ext'] },
+                { id: 'oh_tri_ext', name: 'Cable Overhead Triceps Extensions', sets: 2, warmups: 1, machines: CABLES }
             ],
             pull: [
                 { id: 'lat_pull', name: 'Lat Pulldown', sets: 2 },
                 { id: 'high_row', name: 'Machine High Row', sets: 2, warmups: 1 },   // 2nd back exercise
-                { id: 'cable_rev_fly', name: 'Cable Reverse Fly', sets: 2, step: 2.5, defaultWeight: 15 },
+                { id: 'cable_rev_fly', name: 'Cable Reverse Fly', sets: 2, machines: CABLES, defaultWeight: 15 },
                 { id: 'db_curl', name: 'Dumbbell Bicep Curls', sets: 2, sizes: DUMBBELLS },
                 { id: 'abs_crunch', name: 'Machine Abs Crunch', sets: 2 }
             ],
@@ -835,7 +898,7 @@
                 { id: 'kb_split_squat', name: 'KB Bulgarian Split Squats', sets: 2, unit: 'kg', sizes: KETTLEBELLS, defaultWeight: 16 },
                 { id: 'leg_press', name: 'Machine Leg Press', sets: 2, warmups: 1 },  // 2nd quad exercise
                 { id: 'calf_raise', name: 'Machine Calf Raises', sets: 2 },
-                { id: 'pallof', name: 'Pallof Press', sets: 2, step: 2.5 }                        // cable
+                { id: 'pallof', name: 'Pallof Press', sets: 2, machines: CABLES }
             ]
         };
 
@@ -885,7 +948,16 @@
             }
             return best;
         }
-        function stepOf(ex) { return ex.step || 5; }
+        // The machine picked for an exercise (remembered per exercise), or null
+        function machineOf(ex) {
+            if (!ex.machines) return null;
+            const m = store.get('machine_' + ex.id, ex.machines[0]);
+            return ex.machines.includes(m) ? m : ex.machines[0];
+        }
+        function machineInfo(ex) { const m = machineOf(ex); return m ? MACHINES[m] : null; }
+        // Fixed weight list (machine stack, kettlebells, dumbbells) or null
+        function sizesOf(ex) { const m = machineInfo(ex); return (m && m.weights) || ex.sizes || null; }
+        function stepOf(ex) { const m = machineInfo(ex); return (m && m.step) || ex.step || 5; }
         // Round to the exercise's step (5 or 2.5 lbs), avoiding floating-point leftovers.
         function roundToStep(ex, w) { return Math.round(Math.round(w / stepOf(ex)) * stepOf(ex) * 10) / 10; }
         // 102.5 -> "102.5", 100 -> "100"
@@ -900,24 +972,40 @@
 
         // Move one step up (+1) or down (-1): next bell for fixed sizes, the exercise's step otherwise.
         function stepWeight(ex, current, dir) {
-            if (ex.sizes) {
-                let i = ex.sizes.indexOf(nearestSize(ex.sizes, current)) + dir;
-                i = Math.max(0, Math.min(ex.sizes.length - 1, i));
-                return ex.sizes[i];
+            const sizes = sizesOf(ex);
+            if (sizes) {
+                let i = sizes.indexOf(nearestSize(sizes, current)) + dir;
+                i = Math.max(0, Math.min(sizes.length - 1, i));
+                return sizes[i];
             }
             return Math.max(0, roundToStep(ex, current + dir * stepOf(ex)));
         }
 
         // Storage keys: Set 1 uses "<id>_weight" / "<id>_reps" (so existing data carries over),
         // later sets use "<id>_s2_weight" / "<id>_s2_reps".
+        // These are also the ids of the on-screen readouts.
         function key(ex, set, type) { return ex.id + (set > 1 ? '_s' + set : '') + '_' + type; }
+        // Where values are saved. Exercises with a machine choice keep weight and reps per machine
+        // ("cab_lat@freemotion_weight"), since the same number feels different on each machine.
+        function skey(ex, set, type) {
+            const m = machineOf(ex);
+            return m ? `${ex.id}@${m}` + (set > 1 ? '_s' + set : '') + '_' + type : key(ex, set, type);
+        }
+        // A machine you haven't used yet starts from what you logged before machines existed.
+        function loadSaved(ex, set, type, fallback) {
+            let v = store.get(skey(ex, set, type), null);
+            if (v === null && ex.machines) v = store.get(key(ex, set, type), null);
+            return v === null ? fallback : v;
+        }
         function setsOf(ex) { return ex.sets || 1; }
         function warmupsOf(ex) { return ex.warmups === undefined ? 2 : ex.warmups; }
 
         function loadWeight(ex, set, fallback) {
-            let w = parseFloat(store.get(key(ex, set, 'weight'), fallback));
+            let w = parseFloat(loadSaved(ex, set, 'weight', fallback));
             if (isNaN(w)) w = fallback;
-            if (ex.sizes) w = nearestSize(ex.sizes, w);
+            const sizes = sizesOf(ex);
+            if (sizes) w = nearestSize(sizes, w);
+            else if (ex.machines) w = Math.max(0, roundToStep(ex, w));
             return w;
         }
 
@@ -930,7 +1018,7 @@
                     <div class="control-label">${label}</div>
                     <div class="control-actions">
                         <button class="btn-adjust" onclick="updateVal('${ex.id}', '${type}', -1, ${set})">-</button>
-                        <div class="val-display"><span id="${id}">${start}</span>${unit}</div>
+                        <div class="val-display"><div class="val-main"><span id="${id}">${start}</span>${unit}</div>${type === 'weight' && ex.machines ? `<div class="w-hint" id="${id}_hint"></div>` : ''}</div>
                         <button class="btn-adjust" onclick="updateVal('${ex.id}', '${type}', 1, ${set})">+</button>
                     </div>
                 </div>`;
@@ -963,7 +1051,7 @@
 
             return `
             <div class="exercise-card">
-                <div class="card-head"><span>${dayHeads[day]}</span><span>${num} / ${total}</span></div>
+                <div class="card-head">${ex.machines ? machineSelectHtml(ex) : `<span>${dayHeads[day]}</span>`}<span>${num} / ${total}</span></div>
                 <div class="exercise-title">${ex.name}</div>
                 <div class="card-body">
                     ${controls}
@@ -973,7 +1061,7 @@
                 <div class="notes">${target}</div>
                 <button class="rest-start" onclick="restOpen('${ex.id}')">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.96 8.96 0 0 0 12 4a9 9 0 1 0 9 9c0-2.12-.74-4.07-1.97-5.61zM12 20a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
-                    Rest ${fmtClock(REST_SECONDS * 1000).replace(/^0/, '')}
+                    <span class="rest-label">${REST_LABEL}</span>
                 </button>
                 </div>
             </div>`;
@@ -994,24 +1082,47 @@
             }
 
             // Load saved data and calculate warmups
-            ['push', 'pull', 'legs'].forEach(day => {
-                exercises[day].forEach(ex => {
-                    const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
-                    for (let s = 1; s <= setsOf(ex); s++) {
-                        // A set that has never been adjusted starts at the Set 1 weight.
-                        const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
-                        const reps = store.get(key(ex, s, 'reps'), 6);
-
-                        const weightEl = document.getElementById(key(ex, s, 'weight'));
-                        const repsEl = document.getElementById(key(ex, s, 'reps'));
-                        if (weightEl) showWeight(weightEl, weight);
-                        if (repsEl) repsEl.innerText = reps;
-                    }
-                    calcWarmups(ex, set1Weight);
-                });
-            });
+            ['push', 'pull', 'legs'].forEach(day => exercises[day].forEach(loadExercise));
 
             updateSummary();
+        }
+
+        // Put an exercise's saved values (for its current machine) on screen
+        function loadExercise(ex) {
+            const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
+            for (let s = 1; s <= setsOf(ex); s++) {
+                // A set that has never been adjusted starts at the Set 1 weight.
+                const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
+                const reps = loadSaved(ex, s, 'reps', 6);
+                const weightEl = document.getElementById(key(ex, s, 'weight'));
+                const repsEl = document.getElementById(key(ex, s, 'reps'));
+                if (weightEl) { showWeight(weightEl, weight); showHint(ex, s, weight); }
+                if (repsEl) repsEl.innerText = reps;
+            }
+            calcWarmups(ex, set1Weight);
+            const sel = document.getElementById(ex.id + '_machine');
+            if (sel) sel.value = machineOf(ex);
+        }
+
+        function machineSelectHtml(ex) {
+            return `<select class="machine-select" id="${ex.id}_machine" aria-label="Machine for ${ex.name}"
+                        onchange="setMachine('${ex.id}', this.value)">
+                ${ex.machines.map(m => `<option value="${m}">${MACHINES[m].name}</option>`).join('')}
+            </select>`;
+        }
+        function setMachine(id, m) {
+            const ex = findEx(id);
+            if (!ex || !ex.machines.includes(m)) return;
+            store.set('machine_' + id, m);
+            loadExercise(ex);
+            updateSummary();
+        }
+        // "47.5 + slider" under weights that need the Dual Pulley's add-on
+        function showHint(ex, set, w) {
+            const el = document.getElementById(key(ex, set, 'weight') + '_hint');
+            if (!el) return;
+            const m = machineInfo(ex);
+            el.textContent = m && m.hint ? m.hint(w) : '';
         }
 
         function updateVal(id, type, dir, set) {
@@ -1033,16 +1144,18 @@
                         const other = document.getElementById(key(ex, s, 'weight'));
                         if (other && readWeight(other) === prev) {
                             showWeight(other, val);
-                            store.set(key(ex, s, 'weight'), val);
+                            showHint(ex, s, val);
+                            store.set(skey(ex, s, 'weight'), val);
                         }
                     }
                 }
                 showWeight(el, val);
+                showHint(ex, set, val);
             } else {
                 val = Math.max(0, val + dir); // Prevent negative numbers
                 el.innerText = val;
             }
-            store.set(key(ex, set, type), val);
+            store.set(skey(ex, set, type), val);
 
             // Instantly update summary when values change
             updateSummary();
@@ -1051,9 +1164,10 @@
         function calcWarmups(ex, weight) {
             let w = parseFloat(weight);
             let wu1, wu2;
-            if (ex.sizes) {
-                wu1 = nearestSize(ex.sizes, w * 0.5);
-                wu2 = nearestSize(ex.sizes, w * 0.75);
+            const sizes = sizesOf(ex);
+            if (sizes) {
+                wu1 = fmtWeight(nearestSize(sizes, w * 0.5));
+                wu2 = fmtWeight(nearestSize(sizes, w * 0.75));
             } else {
                 // Rounded to the exercise's step: 5 lbs, or 2.5 lbs on cables
                 wu1 = fmtWeight(roundToStep(ex, w * 0.5));
@@ -1079,13 +1193,13 @@
                     let lines = '';
                     for (let s = 1; s <= setsOf(ex); s++) {
                         const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
-                        const reps = store.get(key(ex, s, 'reps'), 6);
+                        const reps = loadSaved(ex, s, 'reps', 6);
                         lines += `<div>${fmtWeight(weight)} ${unitOf(ex)} &times; ${reps}</div>`;
                     }
                     
                     html += `
                     <div class="summary-row">
-                        <div class="summary-name">${ex.name}</div>
+                        <div class="summary-name">${ex.name}${machineInfo(ex) ? `<span class="fx-machine">${machineInfo(ex).name}</span>` : ''}</div>
                         <div class="summary-stats">${lines}</div>
                     </div>`;
                 });
@@ -1174,12 +1288,35 @@
             rest.status.textContent = status;
             rest.el.dataset.state = rest.state;
             rest.minus.disabled = rest.state === 'done';
+            restRenderButtons();
+        }
+
+        // Every exercise's Rest button mirrors the timer: countdown while it runs, "Time's up" after.
+        function restRenderButtons() {
+            let label = REST_LABEL, cls = '';
+            if (rest.open) {
+                if (rest.state === 'done') { label = "Time's up"; cls = 'done'; }
+                else {
+                    label = (rest.state === 'paused' ? 'Paused ' : '') + fmtClock(Math.max(0, restLeft()));
+                    cls = 'ticking';
+                }
+            }
+            if (label === rest.btnLabel && cls === rest.btnCls) return;
+            rest.btnLabel = label;
+            rest.btnCls = cls;
+            document.querySelectorAll('.rest-start').forEach(b => {
+                b.classList.toggle('ticking', cls === 'ticking');
+                b.classList.toggle('done', cls === 'done');
+                b.querySelector('.rest-label').textContent = label;
+            });
         }
 
         function restTick() {
             rest.raf = 0;
             if (!rest.open) return;
             if (rest.state === 'running' && restLeft() <= 0) restFinish(true);
+            // Minimized and forgotten: tidy up 10 minutes after time's up
+            if (rest.state === 'done' && rest.minimized && Date.now() - rest.endAt > 10 * 60 * 1000) { restClose(); return; }
             restRender();
             if (rest.state !== 'paused' && !document.hidden) rest.raf = requestAnimationFrame(restTick);
         }
@@ -1270,34 +1407,60 @@
             } catch (e) { /* screen follows its normal timeout */ }
         }
 
+        // Rest button: starts a rest, or, while one is running, brings the timer back up.
         function restOpen(id) {
+            restUnlockSound();
+            if (rest.open && rest.state !== 'done') { restExpand(); return; }
             const ex = findEx(id);
             rest.name.textContent = ex ? ex.name : '';
+            const wasOpen = rest.open;
             rest.open = true;
+            rest.minimized = false;
             rest.el.hidden = false;
-            restUnlockSound();
             restStart(REST_SECONDS * 1000);
             restKeepAwake(true);
-            // So Android's back gesture closes the timer instead of leaving the app
-            history.pushState({ restTimer: true }, '');
+            // So Android's back gesture minimizes the timer instead of leaving the app
+            if (!wasOpen || !(history.state && history.state.restTimer)) history.pushState({ restTimer: true }, '');
         }
 
-        function restClose(fromBack) {
+        // Minimize: the timer keeps running (and still buzzes); Rest buttons show the countdown.
+        function restMinimize(fromBack) {
+            if (!rest.open || rest.minimized) return;
+            rest.minimized = true;
+            rest.el.hidden = true;
+            if (!fromBack && history.state && history.state.restTimer) history.back();
+            restRenderButtons();
+        }
+        function restExpand() {
+            if (!rest.open || !rest.minimized) return;
+            rest.minimized = false;
+            rest.el.hidden = false;
+            history.pushState({ restTimer: true }, '');
+            restRender();
+            restKick();
+        }
+
+        // X: stop the timer
+        function restClose() {
             if (!rest.open) return;
+            const wasExpanded = !rest.minimized;
             rest.open = false;
+            rest.minimized = false;
             rest.el.hidden = true;
             if (rest.raf) cancelAnimationFrame(rest.raf);
             rest.raf = 0;
             restKeepAwake(false);
-            if (!fromBack && history.state && history.state.restTimer) history.back();
+            restRenderButtons();
+            if (wasExpanded && history.state && history.state.restTimer) history.back();
         }
 
-        document.getElementById('rest_close').addEventListener('click', () => restClose(false));
+        document.getElementById('rest_close').addEventListener('click', () => restClose());
+        document.getElementById('rest_min').addEventListener('click', () => restMinimize(false));
         document.getElementById('rest_pause').addEventListener('click', restTogglePause);
         document.getElementById('rest_minus').addEventListener('click', () => restAdjust(-60000));
         document.getElementById('rest_plus').addEventListener('click', () => restAdjust(60000));
         document.getElementById('rest_restart').addEventListener('click', () => restStart(REST_SECONDS * 1000));
-        window.addEventListener('popstate', () => restClose(true));
+        window.addEventListener('popstate', () => { if (rest.open && !rest.minimized) restMinimize(true); });
         // Coming back to the app: catch up the clock and keep the screen on again.
         document.addEventListener('visibilitychange', () => {
             if (document.hidden || !rest.open) return;
@@ -1332,8 +1495,9 @@
                 const set1Weight = loadWeight(ex, 1, defaultWeight(ex));
                 for (let s = 1; s <= setsOf(ex); s++) {
                     const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
-                    const reps = parseInt(store.get(key(ex, s, 'reps'), 6)) || 0;
-                    rows.push({ exId: ex.id, exercise: ex.name, set: s, weight, unit: unitOf(ex), reps });
+                    const reps = parseInt(loadSaved(ex, s, 'reps', 6)) || 0;
+                    const m = machineInfo(ex);
+                    rows.push({ exId: ex.id, exercise: ex.name, set: s, weight, unit: unitOf(ex), reps, machine: m ? m.name : '' });
                 }
             });
             return rows;
@@ -1360,12 +1524,12 @@
             const groups = [];
             currentSets(day).forEach(r => {
                 let g = groups.find(x => x.exId === r.exId);
-                if (!g) groups.push(g = { exId: r.exId, name: r.exercise, sets: [] });
+                if (!g) groups.push(g = { exId: r.exId, name: r.exercise, machine: r.machine, sets: [] });
                 g.sets.push(r);
             });
             list.innerHTML = groups.map(g => `
                 <div class="finish-row">
-                    <div class="fx-name">${g.name}</div>
+                    <div class="fx-name">${g.name}${g.machine ? `<span class="fx-machine">${g.machine}</span>` : ''}</div>
                     <div class="fx-sets">${g.sets.map(r => `<div>${fmtWeight(r.weight)} ${r.unit} &times; ${r.reps}</div>`).join('')}</div>
                 </div>`).join('');
             document.getElementById(day + '_finish_date').textContent =
@@ -1441,6 +1605,7 @@
                 weight: r.weight,
                 unit: r.unit,
                 reps: r.reps,
+                machine: r.machine || '',
                 // Estimated 1-rep max (Epley): one number that rises with weight or reps
                 e1rm: r.reps > 0 ? Math.round(r.weight * (1 + r.reps / 30) * 10) / 10 : ''
             }));
@@ -1687,6 +1852,8 @@
             if (!bpm) { hrSetState('lost'); return; } // 0 = strap has no skin contact
             hr.retries = 0;
             hr.lastBpm = bpm;
+            // Heart in the top bar beats at your heart rate
+            hr.btn.style.setProperty('--beat', (60 / Math.max(30, Math.min(220, bpm))).toFixed(2) + 's');
             hrRecord(bpm);
             if (hr.btn.dataset.state !== 'recording') hrSetState('recording');
             else {
