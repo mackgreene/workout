@@ -54,8 +54,12 @@ or Triceps Extension. Tap the machine name at the top of the card to switch.
   weights that need the slider show e.g. "47.5 + slider" under the number
 - Adjustable Cable Crossover: 5 ... 35 in 5s, then 42.5 ... 95 in 7.5s (no slider)
 - Triceps Press, Triceps Extension: 5 lb steps
-Weight and reps are remembered per machine for each exercise. The machine is saved with every
-set and goes to the Machine column in Google Sheets.
+All three stacks are labelled with the resistance **at the handle**, so the numbers are comparable
+between machines. The Freemotion label rounds its 1.5 kg plates to whole pounds; the app shows the
+exact value under the weight ("26.5 at handle"). Each exercise keeps one weight: switch machines and
+it converts to the nearest pin on the new machine (same resistance at the handle), reps unchanged.
+The machine and the at-the-handle weight are saved with every set and go to the Machine and
+Handle lbs columns in Google Sheets; the Progress tab's estimated 1RM uses the at-the-handle weight.
 
 ## Full-screen exercises
 On Push, Pull and Legs each exercise fills the screen below the top bar, and one swipe
@@ -91,6 +95,16 @@ reconnecting by itself. Turn the number off on the Info tab (Show live heart rat
   workout's lowest reading. Time there is the "Below" row in Time in zones.
 - The font in the summary is Barlow Condensed (SIL Open Font License, `fonts/OFL.txt`).
 
+## Pausing a workout (finishing later the same day)
+Sets save as you tap, so leaving mid-workout loses nothing. To leave cleanly, tap **Pause
+workout** on the Info tab (it shows which exercise you're on) or **Pause** on the Finish screen.
+That stops the strap (keeping what it recorded), remembers the exercise, and lets the screen sleep.
+When you're back, the Info tab shows **Resume**: it opens that exercise and, if you were
+recording, brings up the strap picker. Tapping the day's tab also jumps back to that exercise.
+Save at the end as usual; the heart rate summary merges both sessions (a dashed line marks the
+break, the duration counts only time with the strap on, and the sessions are listed under it).
+If a day you edited was never saved, the Info tab offers to save it under that date, or dismiss it.
+
 ## Saving workouts and Google Sheets
 After the last exercise of each day, swipe once more to the **Finish workout** screen and tap
 **Save workout**. It stores the day on the phone (one entry per date and day; saving again
@@ -103,7 +117,7 @@ With the v8 script, workouts with heart rate also get a row in a **Heart Rate** 
 average, max, time in each zone). The older script keeps working; it just skips heart rate.
 
 ## Updating the app later
-Edit `index.html`, then bump the version in two places: the `Version 9.0` line at the top of the Info
-tab in `index.html` and `CACHE` in `sw.js` (e.g. `ppl-workout-v9` → `ppl-workout-v9.1`).
+Edit `index.html`, then bump the version in two places: the `Version 9.2` line at the top of the Info
+tab in `index.html` and `CACHE` in `sw.js` (e.g. `ppl-workout-v9.2` → `ppl-workout-v9.3`).
 Re-upload.
 Phones will pick up the new version the next time they open the app with a connection.

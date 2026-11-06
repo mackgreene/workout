@@ -593,6 +593,12 @@
         .w-hint { font-size: 12px; font-weight: normal; color: #4CAF50; white-space: nowrap; line-height: 1.2; }
         .w-hint:empty { display: none; }
 
+        /* Info tab: today's workout (in progress / paused / not saved yesterday) */
+        .today-card { border-left-color: #ffdd1f; }
+        .today-row + .today-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid #333; }
+        .today-row p { margin: 0 0 12px 0; font-size: 20px; line-height: 1.4; color: #cccccc; }
+        .today-row .btn-finish { min-height: 54px; font-size: 20px; }
+
         .app-version { text-align: right; font-size: 15px; color: #999999; letter-spacing: 0.5px; margin: 0 2px -4px 0; }
 
         /* Finish screen: Save + View summary side by side once saved */
@@ -707,10 +713,10 @@
 <body>
 
     <div class="nav-bar">
-        <button class="nav-btn active" onclick="openTab(event, 'info')">Info</button>
-        <button class="nav-btn" onclick="openTab(event, 'push')">Push</button>
-        <button class="nav-btn" onclick="openTab(event, 'pull')">Pull</button>
-        <button class="nav-btn" onclick="openTab(event, 'legs')">Legs</button>
+        <button class="nav-btn active" data-tab="info" onclick="showTab('info')">Info</button>
+        <button class="nav-btn" data-tab="push" onclick="showTab('push')">Push</button>
+        <button class="nav-btn" data-tab="pull" onclick="showTab('pull')">Pull</button>
+        <button class="nav-btn" data-tab="legs" onclick="showTab('legs')">Legs</button>
         <button id="hr_btn" class="hr-btn" data-state="idle" aria-label="Heart rate recording">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             <span id="hr_val" class="hr-val"></span>
@@ -726,7 +732,8 @@
             </div>
 
             <!-- App version: bump this together with CACHE in sw.js -->
-            <div id="app_version" class="app-version">Version 9.0</div>
+            <div id="app_version" class="app-version">Version 9.2</div>
+            <div id="today_card" class="summary-card today-card" hidden></div>
 
             <h2>The Protocol</h2>
             <ul class="rules-list">
@@ -852,10 +859,18 @@
 
         // Machines at your gym. A machine with a weight list steps through exactly those weights
         // (as printed on its stack); one with a step goes up and down by that amount.
+        // All three cable machines label their stacks with the resistance AT THE HANDLE (the
+        // real plates are 2 to 4 times heavier), so the labels are comparable between machines.
+        // The Freemotion label rounds its 1.5 kg plates to whole pounds; "handle" keeps the exact
+        // value (27 on the label is 26.5 lbs at the handle). Switching machines converts the
+        // at-the-handle weight to the nearest pin on the new machine.
+        const FREEMOTION_LABELS = [3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40, 43, 47, 50, 53, 57, 60, 63, 67, 70, 73, 77, 80];
         const MACHINES = {
             freemotion: {
                 name: 'Freemotion Dual Cable Cross', short: 'Freemotion',
-                weights: [3, 7, 10, 13, 17, 20, 23, 27, 30, 33, 37, 40, 43, 47, 50, 53, 57, 60, 63, 67, 70, 73, 77, 80]
+                weights: FREEMOTION_LABELS,
+                handle: FREEMOTION_LABELS.map((_, i) => Math.round((i + 1) * 1.5 * 2.20462 * 10) / 10),
+                hint: (w, h) => (h !== w ? `${fmtWeight(h)} at handle` : '')
             },
             dual_pulley: {
                 // 5 lb plates from 2.5 to 97.5, plus a 2.5 lb slider: every 2.5 lbs from 2.5 to 100
@@ -957,6 +972,26 @@
         function machineInfo(ex) { const m = machineOf(ex); return m ? MACHINES[m] : null; }
         // Fixed weight list (machine stack, kettlebells, dumbbells) or null
         function sizesOf(ex) { const m = machineInfo(ex); return (m && m.weights) || ex.sizes || null; }
+        // Resistance at the handle for a label weight on a machine (same number unless the label rounds)
+        function handleOf(mId, w) {
+            const m = MACHINES[mId];
+            if (!m || !m.handle) return w;
+            const i = m.weights.indexOf(w);
+            return i >= 0 ? m.handle[i] : w;
+        }
+        // The label weight on a machine closest to an at-the-handle weight
+        function labelFor(mId, h) {
+            const m = MACHINES[mId];
+            if (!m) return h;
+            if (m.weights) {
+                const scale = m.handle || m.weights;
+                let best = 0;
+                for (let i = 1; i < scale.length; i++) if (Math.abs(scale[i] - h) < Math.abs(scale[best] - h)) best = i;
+                return m.weights[best];
+            }
+            return Math.max(0, Math.round(h / m.step) * m.step);
+        }
+        function handleWeight(ex, w) { const m = machineOf(ex); return m ? handleOf(m, w) : w; }
         function stepOf(ex) { const m = machineInfo(ex); return (m && m.step) || ex.step || 5; }
         // Round to the exercise's step (5 or 2.5 lbs), avoiding floating-point leftovers.
         function roundToStep(ex, w) { return Math.round(Math.round(w / stepOf(ex)) * stepOf(ex) * 10) / 10; }
@@ -985,17 +1020,30 @@
         // later sets use "<id>_s2_weight" / "<id>_s2_reps".
         // These are also the ids of the on-screen readouts.
         function key(ex, set, type) { return ex.id + (set > 1 ? '_s' + set : '') + '_' + type; }
-        // Where values are saved. Exercises with a machine choice keep weight and reps per machine
-        // ("cab_lat@freemotion_weight"), since the same number feels different on each machine.
-        function skey(ex, set, type) {
-            const m = machineOf(ex);
-            return m ? `${ex.id}@${m}` + (set > 1 ? '_s' + set : '') + '_' + type : key(ex, set, type);
-        }
-        // A machine you haven't used yet starts from what you logged before machines existed.
+        // Weight and reps are kept per exercise (as the label weight on the current machine).
+        // Switching machines converts the weight, so one progression carries across machines.
+        function skey(ex, set, type) { return key(ex, set, type); }
         function loadSaved(ex, set, type, fallback) {
-            let v = store.get(skey(ex, set, type), null);
-            if (v === null && ex.machines) v = store.get(key(ex, set, type), null);
+            const v = store.get(key(ex, set, type), null);
             return v === null ? fallback : v;
+        }
+        // v9 kept a copy per machine ("cab_lat@freemotion_weight"). Bring the current machine's
+        // copy forward once, then drop the per-machine copies.
+        function migrateMachineKeys() {
+            let names = [];
+            try { for (let i = 0; i < localStorage.length; i++) names.push(localStorage.key(i)); } catch (e) { return; }
+            names = names.filter(n => /^[a-z_]+@[a-z_]+(_s\d)?_(weight|reps)$/.test(n));
+            if (!names.length) return;
+            ['push', 'pull', 'legs'].forEach(day => exercises[day].forEach(ex => {
+                if (!ex.machines) return;
+                const m = machineOf(ex);
+                for (let s2 = 1; s2 <= setsOf(ex); s2++) ['weight', 'reps'].forEach(type => {
+                    const from = `${ex.id}@${m}` + (s2 > 1 ? '_s' + s2 : '') + '_' + type;
+                    const v = store.get(from, null);
+                    if (v !== null) store.set(key(ex, s2, type), v);
+                });
+            }));
+            names.forEach(n => { try { localStorage.removeItem(n); } catch (e) { /* fine */ } });
         }
         function setsOf(ex) { return ex.sets || 1; }
         function warmupsOf(ex) { return ex.warmups === undefined ? 2 : ex.warmups; }
@@ -1075,6 +1123,8 @@
                     + finishCardHtml(day);
             });
 
+            migrateMachineKeys();
+
             // One-time carry-over: keep the reps you logged on the dumbbell split squats.
             if (store.get('kb_split_squat_reps', null) === null) {
                 const oldReps = store.get('split_squat_reps', null);
@@ -1085,6 +1135,19 @@
             ['push', 'pull', 'legs'].forEach(day => exercises[day].forEach(loadExercise));
 
             updateSummary();
+
+            // Remember which exercise is on screen, so Pause knows where you were
+            if ('IntersectionObserver' in window) {
+                const io = new IntersectionObserver(entries => {
+                    entries.forEach(en => {
+                        if (!en.isIntersecting) return;
+                        const day = en.target.closest('.tab-content').id;
+                        noteView(day, [...document.querySelectorAll('#' + day + ' .exercise-card')].indexOf(en.target));
+                    });
+                }, { threshold: 0.6 });
+                document.querySelectorAll('.exercise-card').forEach(c => io.observe(c));
+            }
+            renderTodayCard();
         }
 
         // Put an exercise's saved values (for its current machine) on screen
@@ -1113,16 +1176,25 @@
         function setMachine(id, m) {
             const ex = findEx(id);
             if (!ex || !ex.machines.includes(m)) return;
-            store.set('machine_' + id, m);
+            const from = machineOf(ex);
+            if (from !== m) {
+                // Carry each set's weight across: same resistance at the handle, nearest pin here
+                for (let s2 = 1; s2 <= setsOf(ex); s2++) {
+                    const w = loadWeight(ex, s2, s2 === 1 ? defaultWeight(ex) : loadWeight(ex, 1, defaultWeight(ex)));
+                    store.set(key(ex, s2, 'weight'), labelFor(m, handleOf(from, w)));
+                }
+                store.set('machine_' + id, m);
+            }
+            noteEdit(activeDay());
             loadExercise(ex);
             updateSummary();
         }
-        // "47.5 + slider" under weights that need the Dual Pulley's add-on
+        // Under the weight: "47.5 + slider" on the Dual Pulley, "26.5 at handle" on the Freemotion
         function showHint(ex, set, w) {
             const el = document.getElementById(key(ex, set, 'weight') + '_hint');
             if (!el) return;
             const m = machineInfo(ex);
-            el.textContent = m && m.hint ? m.hint(w) : '';
+            el.textContent = m && m.hint ? m.hint(w, handleWeight(ex, w)) : '';
         }
 
         function updateVal(id, type, dir, set) {
@@ -1156,6 +1228,7 @@
                 el.innerText = val;
             }
             store.set(skey(ex, set, type), val);
+            noteEdit(activeDay());
 
             // Instantly update summary when values change
             updateSummary();
@@ -1214,21 +1287,89 @@
             ['push', 'pull', 'legs'].forEach(renderFinish); // keep the Finish screens current
         }
 
-        function openTab(evt, tabId) {
-            let i, tabcontent, navbtns;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].classList.remove("active");
-            }
-            navbtns = document.getElementsByClassName("nav-btn");
-            for (i = 0; i < navbtns.length; i++) {
-                navbtns[i].classList.remove("active");
-            }
-            document.getElementById(tabId).classList.add("active");
-            evt.currentTarget.classList.add("active");
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.nav-btn[data-tab="${tabId}"]`).classList.add('active');
             // Snap one exercise at a time on workout days; Info scrolls freely.
             document.documentElement.classList.toggle('snap', tabId !== 'info');
-            window.scrollTo(0,0);
+            window.scrollTo(0, 0);
+            if (tabId === 'info') { renderTodayCard(); return; }
+            // Opening the day you paused takes you back to the exercise you were on
+            const pz = loadJson(PAUSE_KEY);
+            if (pz && pz.date === todayISO() && pz.day === tabId) {
+                clearPause();
+                scrollToExercise(tabId, pz.index);
+            }
+        }
+        function activeDay() {
+            const t = document.querySelector('.tab-content.active');
+            return t && t.id !== 'info' ? t.id : null;
+        }
+
+        // ---------- Pause and resume ----------
+        // Sets are saved as you tap, so leaving mid-workout loses nothing. Pause also stops the
+        // strap (keeping what it recorded), notes the exercise you were on, and lets the screen
+        // sleep. Resume takes you back there and reconnects the strap.
+        const PAUSE_KEY = 'wk_pause', VIEW_KEY = 'wk_view', EDIT_KEY = 'wk_edit', DISMISS_KEY = 'wk_dismiss';
+        function loadJson(k) { try { return JSON.parse(store.get(k, 'null')); } catch (e) { return null; } }
+        function noteEdit(day) { if (day) store.set(EDIT_KEY, JSON.stringify({ date: todayISO(), day })); }
+        function noteView(day, index) { store.set(VIEW_KEY, JSON.stringify({ date: todayISO(), day, index })); }
+        function clearPause() { try { localStorage.removeItem(PAUSE_KEY); } catch (e) { /* fine */ } }
+        function isSaved(date, day) { return loadHistory().some(w => w.id === workoutId(date, day)); }
+        function exerciseLabel(day, index) {
+            const list = exercises[day];
+            return index >= list.length ? 'the Finish screen' : `exercise ${index + 1} of ${list.length} (${list[index].name})`;
+        }
+        function scrollToExercise(day, index) {
+            const cards = document.querySelectorAll('#' + day + ' .exercise-card');
+            const c = cards[Math.min(index, cards.length - 1)];
+            if (c) c.scrollIntoView({ block: 'start', behavior: 'instant' });
+        }
+
+        function pauseWorkout(day) {
+            const view = loadJson(VIEW_KEY);
+            const index = view && view.day === day && view.date === todayISO() ? view.index : 0;
+            const wasRecording = hr.wanted;
+            if (hr.wanted) hrStop();
+            if (rest.open) restClose();
+            store.set(PAUSE_KEY, JSON.stringify({ date: todayISO(), day, index, at: Date.now(), hr: wasRecording }));
+            showTab('info');
+        }
+        function resumeWorkout() {
+            const pz = loadJson(PAUSE_KEY);
+            if (!pz) return;
+            clearPause();
+            showTab(pz.day);
+            scrollToExercise(pz.day, pz.index);
+            // The Resume tap is the touch Android needs before it will show the strap picker
+            if (pz.hr) { if (hr.device) hrResume(); else hrStart(); }
+        }
+        function dismissUnsaved(date) { store.set(DISMISS_KEY, date); renderTodayCard(); }
+
+        function renderTodayCard() {
+            const el = document.getElementById('today_card');
+            const today = todayISO();
+            const pz = loadJson(PAUSE_KEY), edit = loadJson(EDIT_KEY), view = loadJson(VIEW_KEY);
+            const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            const parts = [];
+            // A day you edited or recorded on but never saved
+            if (edit && edit.date < today && !isSaved(edit.date, edit.day) && store.get(DISMISS_KEY, '') !== edit.date) {
+                parts.push(`<div class="today-row"><p><strong>${dayNames[edit.day]} on ${fmtDate(edit.date)}</strong> was never saved. Its sets are still on the cards.</p>
+                    <div class="finish-actions"><button class="btn-finish" onclick="finishWorkout('${edit.day}', '${edit.date}')">Save as ${fmtDate(edit.date)}</button>
+                    <button class="btn-finish secondary" onclick="dismissUnsaved('${edit.date}')">Dismiss</button></div></div>`);
+            }
+            if (pz && pz.date === today && !isSaved(today, pz.day)) {
+                const at = new Date(pz.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                parts.push(`<div class="today-row"><p><strong>${dayNames[pz.day]} paused</strong> at ${at}. You were on ${exerciseLabel(pz.day, pz.index)}.${pz.hr ? ' Resume reconnects your strap.' : ''}</p>
+                    <div class="finish-actions"><button class="btn-finish" onclick="resumeWorkout()">Resume ${dayNames[pz.day]}</button></div></div>`);
+            } else if (view && view.date === today && !isSaved(today, view.day)) {
+                parts.push(`<div class="today-row"><p><strong>${dayNames[view.day]} today</strong> · on ${exerciseLabel(view.day, view.index)}.</p>
+                    <div class="finish-actions"><button class="btn-finish secondary" onclick="pauseWorkout('${view.day}')">Pause workout</button></div></div>`);
+            }
+            el.hidden = !parts.length;
+            el.innerHTML = parts.join('');
         }
 
         // ---------- Full-screen sizing: measure the top bar ----------
@@ -1497,7 +1638,8 @@
                     const weight = s === 1 ? set1Weight : loadWeight(ex, s, set1Weight);
                     const reps = parseInt(loadSaved(ex, s, 'reps', 6)) || 0;
                     const m = machineInfo(ex);
-                    rows.push({ exId: ex.id, exercise: ex.name, set: s, weight, unit: unitOf(ex), reps, machine: m ? m.name : '' });
+                    rows.push({ exId: ex.id, exercise: ex.name, set: s, weight, unit: unitOf(ex), reps,
+                                machine: m ? m.name : '', handle: handleWeight(ex, weight) });
                 }
             });
             return rows;
@@ -1513,6 +1655,7 @@
                 <div class="finish-status" id="${day}_finish_status"></div>
                 <div class="finish-actions">
                     <button class="btn-finish" id="${day}_finish_btn" onclick="finishWorkout('${day}')">Save workout</button>
+                    <button class="btn-finish secondary" id="${day}_pause_btn" onclick="pauseWorkout('${day}')">Pause</button>
                     <button class="btn-finish secondary" id="${day}_view_btn" onclick="summaryOpen(workoutId(todayISO(), '${day}'))" hidden>Summary</button>
                 </div>
             </div>`;
@@ -1539,14 +1682,17 @@
             const btn = document.getElementById(day + '_finish_btn');
             const w = loadHistory().find(x => x.id === workoutId(todayISO(), day));
             const viewBtn = document.getElementById(day + '_view_btn');
+            const pauseBtn = document.getElementById(day + '_pause_btn');
             if (!w) {
-                status.textContent = 'Not saved yet today.';
+                status.textContent = 'Not saved yet today. Pause if you\'re coming back later.';
                 status.className = 'finish-status';
                 btn.textContent = 'Save workout';
                 viewBtn.hidden = true;
+                pauseBtn.hidden = false;
                 return;
             }
             viewBtn.hidden = false;
+            pauseBtn.hidden = true;
             const at = new Date(w.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             let sheetsNote;
             if (!sheetsUrl()) sheetsNote = 'Google Sheets isn\'t connected (see Info).';
@@ -1559,21 +1705,24 @@
             btn.textContent = 'Save again';
         }
 
-        function finishWorkout(day) {
-            const date = todayISO();
+        function finishWorkout(day, date) {
+            date = date || todayISO(); // a past date saves a workout you forgot to save that day
             const entry = { id: workoutId(date, day), date, day, savedAt: Date.now(), rows: currentSets(day) };
             const h = loadHistory();
             const i = h.findIndex(x => x.id === entry.id);
-            // Heart rate recorded today goes with the workout. Saving again keeps the earlier
+            // Heart rate recorded that day goes with the workout. Saving again keeps the earlier
             // recording unless there's a newer one.
-            const recorded = hrSummaryForToday();
+            const recorded = hrSummaryFor(date);
             entry.hr = recorded || (i >= 0 && h[i].hr) || null;
             if (i >= 0) h[i] = entry; else h.push(entry);
             saveHistory(h);
             // Ask Android not to clear this app's storage when space runs low
             try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* fine */ }
             if (hr.wanted) hrStop(); // workout's done: stop recording and let the screen sleep again
+            const pz = loadJson(PAUSE_KEY);
+            if (pz && pz.date === date && pz.day === day) clearPause();
             renderFinish(day);
+            renderTodayCard();
             sheetsFlush();
             summaryOpen(entry.id);
         }
@@ -1606,8 +1755,11 @@
                 unit: r.unit,
                 reps: r.reps,
                 machine: r.machine || '',
-                // Estimated 1-rep max (Epley): one number that rises with weight or reps
-                e1rm: r.reps > 0 ? Math.round(r.weight * (1 + r.reps / 30) * 10) / 10 : ''
+                // Resistance at the handle on cable machines (what the stack label means), else the weight
+                handle: r.handle !== undefined ? r.handle : r.weight,
+                // Estimated 1-rep max (Epley) from the at-the-handle weight, so cable progress is
+                // comparable whichever machine you used
+                e1rm: r.reps > 0 ? Math.round((r.handle !== undefined ? r.handle : r.weight) * (1 + r.reps / 30) * 10) / 10 : ''
             }));
         }
 
@@ -1722,6 +1874,7 @@
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) return;
             ['push', 'pull', 'legs'].forEach(renderFinish); // date/status may have changed
+            renderTodayCard();
             sheetsFlush();
         });
         window.addEventListener('load', () => { sheetsDescribe(); sheetsFlush(); });
@@ -1790,7 +1943,7 @@
         }
         function hrDescribe() {
             const s = hr.session || hrLoadSession();
-            const mins = s && s.date === todayISO() ? Math.round(s.bpm.length / 60) : 0;
+            const mins = s && s.date === todayISO() ? Math.round(s.segments.reduce((a, g) => a + g.bpm.filter(Boolean).length, 0) / 60) : 0;
             const state = hr.btn.dataset.state;
             if (state === 'recording') hrInfo(`Recording: ${mins} min so far, last reading ${hr.lastBpm} bpm.`, 'ok');
             else if (state === 'connecting') hrInfo('Connecting to the strap...');
@@ -1820,8 +1973,14 @@
             hrDescribe();
         }
 
+        // A day's recording is a list of segments: one per stretch of continuous readings.
+        // Pausing (or any 10+ minute gap) starts a new segment, so a split workout keeps both halves.
         function hrLoadSession() {
-            try { return JSON.parse(store.get(HR_SESSION_KEY, 'null')); } catch (e) { return null; }
+            try {
+                const s = JSON.parse(store.get(HR_SESSION_KEY, 'null'));
+                if (s && s.bpm && !s.segments) return { date: s.date, segments: [{ start: s.start, bpm: s.bpm }] }; // pre-9.1 format
+                return s;
+            } catch (e) { return null; }
         }
         function hrPersist(force) {
             if (!hr.session) return;
@@ -1833,12 +1992,18 @@
         function hrRecord(bpm) {
             const now = Date.now();
             let s = hr.session || hrLoadSession();
-            const lastAt = s ? s.start + (s.bpm.length - 1) * 1000 : 0;
-            // A new day, or a reading 30+ minutes after the last one, starts a fresh session
-            if (!s || s.date !== todayISO() || now - lastAt > 30 * 60 * 1000) s = { date: todayISO(), start: now, bpm: [] };
-            const i = Math.round((now - s.start) / 1000);
-            while (s.bpm.length < i) s.bpm.push(0);
-            s.bpm[i] = bpm;
+            if (!s || s.date !== todayISO()) s = { date: todayISO(), segments: [] }; // a new day
+            let seg = s.segments[s.segments.length - 1];
+            const lastAt = seg ? seg.start + (seg.bpm.length - 1) * 1000 : 0;
+            if (!seg || hr.breakNext || now - lastAt > 10 * 60 * 1000) {
+                seg = { start: now, bpm: [] };
+                s.segments.push(seg);
+                hr.breakNext = false;
+                noteEdit(activeDay());
+            }
+            const i = Math.round((now - seg.start) / 1000);
+            while (seg.bpm.length < i) seg.bpm.push(0);
+            seg.bpm[i] = bpm;
             hr.session = s;
             hrPersist(false);
         }
@@ -1858,7 +2023,8 @@
             if (hr.btn.dataset.state !== 'recording') hrSetState('recording');
             else {
                 hrRenderLive();
-                if (hr.session.bpm.length % 15 === 0) hrDescribe();
+                const seg = hr.session.segments[hr.session.segments.length - 1];
+                if (seg.bpm.length % 15 === 0) hrDescribe();
             }
         }
 
@@ -1934,6 +2100,7 @@
 
         function hrStop() {
             hr.wanted = false;
+            hr.breakNext = true; // readings after this go in a new segment
             clearTimeout(hr.retryTimer);
             clearTimeout(hr.staleTimer);
             hrPersist(true);
@@ -1974,37 +2141,51 @@
 
         // Turn today's recording into what's kept with the workout:
         // duration, average, max, seconds in each zone, and a 5-second series for the chart.
-        function hrSummaryForToday() {
+        function hrSummaryFor(date) {
             if (hr.session) hrPersist(true);
             const s = hr.session || hrLoadSession();
-            if (!s || s.date !== todayISO()) return null;
+            if (!s || s.date !== date) return null;
             return hrSummarize(s, hrZones());
         }
+        function hrSummaryForToday() { return hrSummaryFor(todayISO()); }
         function hrSummarize(s, zones) {
-            const v = s.bpm;
-            const first = v.findIndex(x => x > 0);
-            let last = v.length - 1;
-            while (last >= 0 && !v[last]) last--;
-            if (first < 0 || last - first < 30) return null; // under 30 seconds isn't worth a chart
-            let sum = 0, n = 0, max = 0, prev = 0, since = 99;
+            // Trim each segment to its first and last reading; skip ones under 10 seconds
+            const segs = [];
+            (s.segments || []).forEach(seg => {
+                const v = seg.bpm;
+                const first = v.findIndex(x => x > 0);
+                let last = v.length - 1;
+                while (last >= 0 && !v[last]) last--;
+                if (first < 0 || last - first < 10) return;
+                segs.push({ v, first, last, start: seg.start + first * 1000, end: seg.start + last * 1000 });
+            });
+            const active = segs.reduce((a, g) => a + (g.last - g.first), 0);
+            if (!segs.length || active < 30) return null; // under 30 seconds isn't worth a chart
+            let sum = 0, n = 0, max = 0;
             const inZone = [0, 0, 0, 0, 0, 0]; // [below zone 1, zone 1 ... zone 5] in seconds
-            for (let i = first; i <= last; i++) {
-                let b = v[i];
-                if (b) { prev = b; since = 0; } else if (++since <= 5) b = prev; // bridge short gaps
-                if (!b) continue;
-                sum += b; n++;
-                if (b > max) max = b;
-                inZone[zoneOf(b, zones)]++;
-            }
-            const series = [];
-            for (let i = first; i <= last; i += 5) {
-                let t = 0, c = 0;
-                for (let j = i; j < Math.min(i + 5, last + 1); j++) if (v[j]) { t += v[j]; c++; }
-                series.push(c ? Math.round(t / c) : 0);
-            }
+            const series = [], breaks = [], sessions = [];
+            segs.forEach((g, gi) => {
+                let prev = 0, since = 99;
+                for (let i = g.first; i <= g.last; i++) {
+                    let b = g.v[i];
+                    if (b) { prev = b; since = 0; } else if (++since <= 5) b = prev; // bridge short gaps
+                    if (!b) continue;
+                    sum += b; n++;
+                    if (b > max) max = b;
+                    inZone[zoneOf(b, zones)]++;
+                }
+                if (gi) { breaks.push(series.length); series.push(0); } // a break between segments
+                for (let i = g.first; i <= g.last; i += 5) {
+                    let t = 0, c = 0;
+                    for (let j = i; j < Math.min(i + 5, g.last + 1); j++) if (g.v[j]) { t += g.v[j]; c++; }
+                    series.push(c ? Math.round(t / c) : 0);
+                }
+                sessions.push({ start: g.start, end: g.end });
+            });
             return {
-                start: s.start + first * 1000, end: s.start + last * 1000, duration: last - first,
-                avg: Math.round(sum / n), max, zones: zones.slice(), inZone, step: 5, series
+                start: segs[0].start, end: segs[segs.length - 1].end,
+                duration: active, // time with the strap on; breaks between sessions don't count
+                avg: Math.round(sum / n), max, zones: zones.slice(), inZone, step: 5, series, breaks, sessions
             };
         }
 
@@ -2063,7 +2244,22 @@
             text(`${dayNames[w.day] || w.day} workout`, PAD, 62, `700 46px ${COND}`, '#ffffff');
             const day = new Date(w.date + 'T12:00:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
             const t = ms => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const nSessions = h && h.sessions ? h.sessions.length : 1;
             text(h ? `${day} · ${t(h.start)} – ${t(h.end)}` : day, PAD, 90, `500 17px ${SANS}`, '#bdbdbd');
+            // Draw a line of text no wider than maxW: shrink the font a little, then trim with an ellipsis
+            const fitText = (str, x, y, size, color, maxW) => {
+                for (let sz = size; sz >= size - 2; sz--) {
+                    g.font = `500 ${sz}px ${SANS}`;
+                    if (g.measureText(str).width <= maxW) return text(str, x, y, g.font, color);
+                }
+                while (str.length > 1 && g.measureText(str + '\u2026').width > maxW) str = str.slice(0, -1);
+                return text(str + '\u2026', x, y, g.font, color);
+            };
+            // "11:35–11:45 AM": the AM/PM only once when both ends share it
+            const range = (a, b) => {
+                const ta = t(a), tb = t(b), sa = ta.slice(-3), sb = tb.slice(-3);
+                return sa === sb && /^ [AP]M$/.test(sa) ? `${ta.slice(0, -3)}–${tb}` : `${ta}–${tb}`;
+            };
 
             // Heart rate: average and max
             text('Heart rate', PAD, 140, `700 36px ${COND}`, '#ffffff');
@@ -2151,6 +2347,12 @@
                 g.beginPath(); r.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]));
                 g.strokeStyle = '#ffffff'; g.lineWidth = 1.6; g.lineJoin = 'round'; g.stroke();
             });
+            // Breaks between sessions (a paused workout): dashed line where time was skipped
+            (h.breaks || []).forEach(i => {
+                const x = xOf(i);
+                g.save(); g.setLineDash([3, 4]); g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.2;
+                g.beginPath(); g.moveTo(x, chartTop); g.lineTo(x, chartBottom); g.stroke(); g.restore();
+            });
             // Start / end times under the chart
             const axisY = bandTop(0) + BAND + 20;
             text(t(h.start), x0, axisY, `500 13px ${SANS}`, '#9a9a9a');
@@ -2160,6 +2362,10 @@
             const d = fmtDuration(h.duration);
             const dw = text(d.text, PAD - 2, axisY + 92, `700 96px ${COND}`, '#ffdd1f');
             text(d.unit, PAD + dw + 6, axisY + 92, `600 22px ${COND}`, '#a8a8a8');
+            if (nSessions > 1) {
+                fitText(`${nSessions} sessions · ` + h.sessions.map(sn => range(sn.start, sn.end)).join(' · '),
+                        PAD, axisY + 118, 14, '#a8a8a8', W - 2 * PAD);
+            }
 
             // Time in zones
             let y = axisY + 148;
